@@ -1,0 +1,27 @@
+import type React from "react"
+import type { Metadata, Viewport } from "next"
+import "./globals.css"
+
+export const metadata: Metadata = {
+  title: "Aussie Golf",
+  description: "Modern golf tournament scoring and management",
+    generator: 'v0.app'
+}
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#2D5016",
+}
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="en">
+      <body style={{ margin: 0, padding: 0, fontFamily: "system-ui, sans-serif" }}>{children}</body>
+    </html>
+  )
+}
