@@ -5,7 +5,16 @@ import "./globals.css"
 export const metadata: Metadata = {
   title: "Aussie Golf",
   description: "Modern golf tournament scoring and management",
-    generator: 'v0.app'
+  generator: "v0.app",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Aussie Golf",
+  },
+  icons: {
+    apple: "/icon-192.jpg",
+  },
 }
 
 export const viewport: Viewport = {
