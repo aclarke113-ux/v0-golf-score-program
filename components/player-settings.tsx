@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Camera, Trophy, Calendar, Gavel, Target, Upload, Loader2 } from "lucide-react"
 import type { User, Player, Tournament } from "@/lib/types"
 import { uploadProfilePicture } from "@/app/actions/upload-profile-picture"
+import { PushNotificationSetup } from "@/components/notifications/push-notification-setup"
 
 type PlayerSettingsProps = {
   currentUser: User
@@ -262,6 +263,8 @@ export function PlayerSettings({
           </Button>
         </CardContent>
       </Card>
+
+      <PushNotificationSetup />
 
       <Card>
         <CardHeader>

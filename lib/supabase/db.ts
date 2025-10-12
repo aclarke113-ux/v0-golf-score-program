@@ -149,6 +149,7 @@ const transformPlayerCredit = (dbCredit: any): PlayerCredit => ({
   playerId: dbCredit.player_id,
   credits: dbCredit.credits,
   tournamentId: dbCredit.tournament_id,
+  unlimitedCredits: dbCredit.unlimited_credits || false,
 })
 
 const transformChampionship = (dbChamp: any): Championship => ({
@@ -976,6 +977,7 @@ export async function createPlayerCredit(credit: Omit<PlayerCredit, "id" | "crea
       tournament_id: credit.tournamentId,
       player_id: credit.playerId,
       credits: credit.credits,
+      unlimited_credits: credit.unlimitedCredits || false,
     })
     .select()
     .single()
@@ -1009,6 +1011,7 @@ export async function updatePlayerCredit(id: string, updates: Partial<PlayerCred
   const supabase = getClient()
   const updateData: any = {}
   if (updates.credits !== undefined) updateData.credits = updates.credits
+  if (updates.unlimitedCredits !== undefined) updateData.unlimited_credits = updates.unlimitedCredits
 
   const { data, error } = await supabase.from("player_credits").update(updateData).eq("id", id).select().single()
 

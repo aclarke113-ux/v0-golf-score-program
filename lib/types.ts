@@ -105,9 +105,11 @@ export interface Auction {
 }
 
 export interface PlayerCredit {
+  id?: string
   playerId: string
   credits: number
-  tournamentId: string // Added to isolate credits per tournament
+  tournamentId: string
+  unlimitedCredits?: boolean // Added unlimited credits flag
 }
 
 export interface Message {
@@ -157,7 +159,7 @@ export interface Tournament {
   updatedAt: string
   numberOfDays: number
   hasPlayAroundDay: boolean
-  scoringType: "strokes" | "handicap"
+  scoringType: "strokes" | "handicap" | "net" // Added "net" as a scoring type option
   hasCalcutta: boolean
   hasPick3: boolean
   calcuttaCloseTime?: string

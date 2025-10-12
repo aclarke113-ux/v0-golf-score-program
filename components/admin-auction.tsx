@@ -39,6 +39,7 @@ export function AdminAuction({
   const [creditAmount, setCreditAmount] = useState<string>("")
   const [loading, setLoading] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [unlimitedCredits, setUnlimitedCredits] = useState(false)
 
   useEffect(() => {
     setLocalCredits(playerCredits)
@@ -181,17 +182,22 @@ export function AdminAuction({
   const unusedCredits = totalCredits - totalBids
 
   const handleAddCredit = async () => {
-    console.log("[v0] handleAddCredit called:", { selectedPlayerId, creditAmount })
+    console.log("[v0] handleAddCredit called:", { selectedPlayerId, creditAmount, unlimitedCredits })
 
-    if (!selectedPlayerId || !creditAmount) {
-      alert("Please select a player and enter credit amount")
+    if (!selectedPlayerId) {
+      alert("Please select a player")
       return
     }
 
-    const amount = creditAmount === "" ? 0 : Number.parseFloat(creditAmount)
+    if (!unlimitedCredits && !creditAmount) {
+      alert("Please enter credit amount or enable unlimited credits")
+      return
+    }
+
+    const amount = unlimitedCredits ? 0 : creditAmount === "" ? 0 : Number.parseFloat(creditAmount)
     console.log("[v0] Parsed amount:", amount)
 
-    if (isNaN(amount) || amount <= 0) {
+    if (!unlimitedCredits && (isNaN(amount) || amount <= 0)) {
       alert("Please enter a valid amount")
       return
     }
@@ -204,7 +210,8 @@ export function AdminAuction({
       if (existingCredit) {
         console.log("[v0] Updating existing credit")
         await updatePlayerCredit(existingCredit.id!, {
-          credits: existingCredit.credits + amount,
+          credits: unlimitedCredits ? existingCredit.credits : existingCredit.credits + amount,
+          unlimitedCredits: unlimitedCredits,
         })
       } else {
         console.log("[v0] Creating new credit")
@@ -212,13 +219,13 @@ export function AdminAuction({
           playerId: selectedPlayerId,
           credits: amount,
           tournamentId: currentTournamentId!,
+          unlimitedCredits: unlimitedCredits,
         })
       }
 
       if (onDataChange) {
         await onDataChange()
       } else {
-        // Fallback: reload credits locally if onDataChange not provided
         console.log("[v0] Reloading credits from database")
         const updatedCredits = await getCreditsByTournament(currentTournamentId!)
         console.log("[v0] Loaded credits:", updatedCredits.length)
@@ -228,6 +235,7 @@ export function AdminAuction({
 
       setCreditAmount("")
       setSelectedPlayerId("")
+      setUnlimitedCredits(false)
     } catch (error) {
       console.error("[v0] Error adding credit:", error)
       alert("Failed to add credit. Please try again.")
@@ -273,10 +281,12 @@ export function AdminAuction({
               {tournamentPlayers.map((player) => {
                 const credit = tournamentCredits.find((pc) => pc.playerId === player.id)
                 const bid = auctions.find((a) => a.buyerId === player.id)
-                const available = (credit?.credits || 0) - (bid?.bidAmount || 0)
+                const available = credit?.unlimitedCredits
+                  ? "∞"
+                  : ((credit?.credits || 0) - (bid?.bidAmount || 0)).toFixed(2)
                 return (
                   <option key={player.id} value={player.id}>
-                    {player.name} - Balance: {available.toFixed(2)}
+                    {player.name} - Balance: {available}
                   </option>
                 )
               })}
@@ -289,12 +299,26 @@ export function AdminAuction({
               value={creditAmount}
               onChange={(e) => setCreditAmount(e.target.value)}
               className="w-32 h-12 text-2xl font-bold px-4"
-              disabled={loading}
+              disabled={loading || unlimitedCredits}
             />
             <Button onClick={handleAddCredit} disabled={loading} className="whitespace-nowrap h-12 px-6">
               <Plus className="w-4 h-4 mr-2" />
               {loading ? "Adding..." : "Add"}
             </Button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="unlimited-credits"
+              checked={unlimitedCredits}
+              onChange={(e) => setUnlimitedCredits(e.target.checked)}
+              disabled={loading}
+              className="w-4 h-4"
+            />
+            <label htmlFor="unlimited-credits" className="text-sm font-medium">
+              Unlimited Credits (∞)
+            </label>
           </div>
 
           <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -304,15 +328,16 @@ export function AdminAuction({
               const bid = auctions.find((a) => a.buyerId === player.id)
               const totalCredit = credit?.credits || 0
               const bidAmount = bid?.bidAmount || 0
-              const available = totalCredit - bidAmount
+              const available = credit?.unlimitedCredits ? "∞" : (totalCredit - bidAmount).toFixed(2)
+              const displayCredit = credit?.unlimitedCredits ? "∞" : totalCredit.toFixed(2)
 
               return (
                 <div key={player.id} className="flex items-center justify-between p-2 bg-muted rounded border text-sm">
                   <span className="font-medium">{player.name}</span>
                   <div className="flex gap-4 text-xs">
-                    <span className="text-muted-foreground">Credit: {totalCredit.toFixed(2)}</span>
+                    <span className="text-muted-foreground">Credit: {displayCredit}</span>
                     <span className="text-muted-foreground">Entry: {bidAmount.toFixed(2)}</span>
-                    <span className="font-semibold">Available: {available.toFixed(2)}</span>
+                    <span className="font-semibold">Available: {available}</span>
                   </div>
                 </div>
               )

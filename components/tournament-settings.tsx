@@ -228,7 +228,7 @@ export function TournamentSettings({
               </Label>
               <Select
                 value={localTournament.scoringType || "handicap"}
-                onValueChange={(value: "strokes" | "handicap") =>
+                onValueChange={(value: "strokes" | "handicap" | "net") =>
                   handleUpdateTournamentSettings({ scoringType: value })
                 }
                 disabled={loading}
@@ -239,6 +239,7 @@ export function TournamentSettings({
                 <SelectContent>
                   <SelectItem value="handicap">Handicap (Stableford Points)</SelectItem>
                   <SelectItem value="strokes">Stroke Play (Gross Strokes)</SelectItem>
+                  <SelectItem value="net">Net Score (Strokes with Handicap)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

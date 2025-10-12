@@ -134,19 +134,21 @@ export function SocialFeed({ currentUserId, currentUserName, tournamentId }: Soc
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {posts.map((post) => (
             <Card key={post.id} className="overflow-hidden">
-              <div className="relative aspect-square bg-muted">
-                {post.mediaType === "video" ? (
-                  <video src={post.mediaUrl} controls className="w-full h-full object-cover">
-                    Your browser does not support the video tag.
-                  </video>
-                ) : (
-                  <img
-                    src={post.mediaUrl || "/placeholder.svg?height=400&width=400"}
-                    alt={post.caption || "Golf moment"}
-                    className="w-full h-full object-cover"
-                  />
-                )}
-              </div>
+              {post.mediaUrl && (
+                <div className="relative aspect-square bg-muted">
+                  {post.mediaType === "video" ? (
+                    <video src={post.mediaUrl} controls className="w-full h-full object-cover">
+                      Your browser does not support the video tag.
+                    </video>
+                  ) : (
+                    <img
+                      src={post.mediaUrl || "/placeholder.svg"}
+                      alt={post.caption || "Golf moment"}
+                      className="w-full h-full object-cover"
+                    />
+                  )}
+                </div>
+              )}
 
               <div className="p-4 space-y-3">
                 <div className="flex items-center gap-4">
@@ -165,11 +167,10 @@ export function SocialFeed({ currentUserId, currentUserName, tournamentId }: Soc
                   </Button>
                 </div>
 
-                {post.caption && (
-                  <p className="text-sm">
-                    <span className="font-semibold">{post.userName}</span> {post.caption}
-                  </p>
-                )}
+                <p className="text-sm">
+                  <span className="font-semibold">{post.userName || "Unknown Player"}</span>
+                  {post.caption && <> {post.caption}</>}
+                </p>
 
                 <p className="text-xs text-muted-foreground">{new Date(post.timestamp).toLocaleDateString()}</p>
               </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -107,6 +107,17 @@ export function GroupsManagement({ competitionId }: { competitionId: string }) {
     setSelectedPlayers((prev) => (prev.includes(playerId) ? prev.filter((id) => id !== playerId) : [...prev, playerId]))
   }
 
+  const playersInGroupsForDay = useMemo(() => {
+    const dayGroups = groups.filter((g) => g.day === day)
+    const playerIds = new Set<string>()
+    dayGroups.forEach((group) => {
+      group.group_players.forEach(({ player }) => {
+        playerIds.add(player.id)
+      })
+    })
+    return playerIds
+  }, [groups, day])
+
   return (
     <div className="space-y-6">
       <Card>
@@ -141,19 +152,28 @@ export function GroupsManagement({ competitionId }: { competitionId: string }) {
           <div className="space-y-2">
             <Label>Select Players (max 4)</Label>
             <div className="grid gap-2 sm:grid-cols-2">
-              {players.map((player) => (
-                <div key={player.id} className="flex items-center space-x-2 rounded-lg border bg-white p-3">
-                  <Checkbox
-                    id={`player-${player.id}`}
-                    checked={selectedPlayers.includes(player.id)}
-                    onCheckedChange={() => togglePlayer(player.id)}
-                    disabled={selectedPlayers.length >= 4 && !selectedPlayers.includes(player.id)}
-                  />
-                  <label htmlFor={`player-${player.id}`} className="flex-1 cursor-pointer text-sm font-medium">
-                    {player.name} (HC: {player.handicap})
-                  </label>
-                </div>
-              ))}
+              {players.map((player) => {
+                const isInGroupForDay = playersInGroupsForDay.has(player.id)
+                const isDisabled =
+                  (selectedPlayers.length >= 4 && !selectedPlayers.includes(player.id)) || isInGroupForDay
+
+                return (
+                  <div key={player.id} className="flex items-center space-x-2 rounded-lg border bg-white p-3">
+                    <Checkbox
+                      id={`player-${player.id}`}
+                      checked={selectedPlayers.includes(player.id)}
+                      onCheckedChange={() => togglePlayer(player.id)}
+                      disabled={isDisabled}
+                    />
+                    <label htmlFor={`player-${player.id}`} className="flex-1 cursor-pointer text-sm font-medium">
+                      {player.name} (HC: {player.handicap})
+                      {isInGroupForDay && (
+                        <span className="text-xs text-muted-foreground ml-2">(Already in Day {day} group)</span>
+                      )}
+                    </label>
+                  </div>
+                )
+              })}
             </div>
             <p className="text-sm text-gray-600">Selected: {selectedPlayers.length} / 4</p>
           </div>
