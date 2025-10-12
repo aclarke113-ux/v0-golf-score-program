@@ -3,11 +3,10 @@
 import { useMemo, useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Trophy, Medal, Award, Eye, EyeOff, RefreshCw } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import type { Player, Course, Group, Round, Tournament } from "@/app/page"
+import { Trophy, Medal, Award, Eye, EyeOff } from "lucide-react"
 import { PlayerProfileModal } from "@/components/player-profile-modal" // Fixed import to use named export instead of default
 import { subscribeToRounds, unsubscribe } from "@/lib/supabase/realtime"
+import type { Player, Course, Group, Round, Tournament } from "@/types" // Declare the variables before using them
 
 type PlayerLeaderboardProps = {
   players?: Player[]
@@ -212,13 +211,9 @@ export function PlayerLeaderboard({
                 Live Leaderboard
               </CardTitle>
               <CardDescription>
-                Current standings - {scoringType === "strokes" ? "Stroke Play" : "Stableford Points"}
+                Auto-refreshing - {scoringType === "strokes" ? "Stroke Play" : "Stableford Points"}
               </CardDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setRefreshKey((prev) => prev + 1)} className="gap-2">
-              <RefreshCw className="w-4 h-4" />
-              Refresh
-            </Button>
           </div>
         </CardHeader>
         <CardContent className="flex-1 flex flex-col overflow-hidden">

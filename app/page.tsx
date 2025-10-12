@@ -104,6 +104,27 @@ export default function HomePage() {
     loadTournamentData()
   }, [currentTournament])
 
+  useEffect(() => {
+    if (!currentTournament) return
+
+    const refreshRounds = async () => {
+      try {
+        const roundsData = await getRoundsByTournament(currentTournament.id)
+        setRounds(roundsData as Round[])
+      } catch (error) {
+        console.error("Error refreshing rounds:", error)
+      }
+    }
+
+    // Refresh immediately on mount
+    refreshRounds()
+
+    // Then refresh every 15 seconds
+    const interval = setInterval(refreshRounds, 15000)
+
+    return () => clearInterval(interval)
+  }, [currentTournament])
+
   const generateTournamentCode = () => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     let code = ""

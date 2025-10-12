@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { LogOut, Trophy, Menu, Copy, Check } from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { PlayerManagement } from "@/components/player-management"
 import { CourseManagement } from "@/components/course-management"
 import { GroupManagement } from "@/components/group-management"
@@ -84,6 +84,7 @@ export function AdminDashboard({
 }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState("players")
   const [copied, setCopied] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false) // Added state to control mobile menu sheet
 
   const copyTournamentCode = () => {
     if (currentTournament?.code) {
@@ -91,6 +92,12 @@ export function AdminDashboard({
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }
+  }
+
+  const handleTabChange = (tab: string) => {
+    // Added handler to close menu and switch tabs
+    setActiveTab(tab)
+    setMobileMenuOpen(false)
   }
 
   return (
@@ -212,40 +219,77 @@ export function AdminDashboard({
               </TabsList>
 
               <div className="md:hidden">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                  <SheetTrigger asChild>
                     <Button variant="outline" className="w-full bg-[#2D5016]/50 border-[#FFD700]/20 text-[#F5F1E8]">
                       <Menu className="w-4 h-4 mr-2" />
                       Menu
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56 bg-[#2D5016] border-[#FFD700]/20">
-                    <DropdownMenuItem onClick={() => setActiveTab("players")} className="text-[#F5F1E8]">
-                      Players
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setActiveTab("courses")} className="text-[#F5F1E8]">
-                      Courses
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setActiveTab("groups")} className="text-[#F5F1E8]">
-                      Groups
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setActiveTab("competitions")} className="text-[#F5F1E8]">
-                      Competitions
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setActiveTab("predictions")} className="text-[#F5F1E8]">
-                      Predictions
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setActiveTab("auction")} className="text-[#F5F1E8]">
-                      Auction
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setActiveTab("leaderboard")} className="text-[#F5F1E8]">
-                      Leaderboard
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setActiveTab("settings")} className="text-[#F5F1E8]">
-                      Settings
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="bg-[#2D5016] border-[#FFD700]/20">
+                    <SheetHeader>
+                      <SheetTitle className="text-[#FFD700]">Admin Menu</SheetTitle>
+                    </SheetHeader>
+                    <div className="flex flex-col gap-2 mt-6">
+                      <Button
+                        onClick={() => handleTabChange("players")}
+                        variant={activeTab === "players" ? "default" : "ghost"}
+                        className="w-full justify-start text-[#F5F1E8]"
+                      >
+                        Players
+                      </Button>
+                      <Button
+                        onClick={() => handleTabChange("courses")}
+                        variant={activeTab === "courses" ? "default" : "ghost"}
+                        className="w-full justify-start text-[#F5F1E8]"
+                      >
+                        Courses
+                      </Button>
+                      <Button
+                        onClick={() => handleTabChange("groups")}
+                        variant={activeTab === "groups" ? "default" : "ghost"}
+                        className="w-full justify-start text-[#F5F1E8]"
+                      >
+                        Groups
+                      </Button>
+                      <Button
+                        onClick={() => handleTabChange("competitions")}
+                        variant={activeTab === "competitions" ? "default" : "ghost"}
+                        className="w-full justify-start text-[#F5F1E8]"
+                      >
+                        Competitions
+                      </Button>
+                      <Button
+                        onClick={() => handleTabChange("predictions")}
+                        variant={activeTab === "predictions" ? "default" : "ghost"}
+                        className="w-full justify-start text-[#F5F1E8]"
+                      >
+                        Predictions
+                      </Button>
+                      <Button
+                        onClick={() => handleTabChange("auction")}
+                        variant={activeTab === "auction" ? "default" : "ghost"}
+                        className="w-full justify-start text-[#F5F1E8]"
+                      >
+                        Auction
+                      </Button>
+                      <Button
+                        onClick={() => handleTabChange("leaderboard")}
+                        variant={activeTab === "leaderboard" ? "default" : "ghost"}
+                        className="w-full justify-start text-[#F5F1E8]"
+                      >
+                        Leaderboard
+                      </Button>
+                      <Button
+                        onClick={() => handleTabChange("settings")}
+                        variant={activeTab === "settings" ? "default" : "ghost"}
+                        className="w-full justify-start text-[#F5F1E8]"
+                      >
+                        Settings
+                      </Button>
+                    </div>
+                  </SheetContent>
+                </Sheet>
               </div>
             </div>
 
