@@ -58,10 +58,10 @@ const transformCourse = (dbCourse: any): Course => {
     id: dbCourse.id,
     name: dbCourse.name,
     holes: Array.isArray(dbCourse.holes)
-      ? dbCourse.holes.map((hole: any) => ({
-          holeNumber: hole.hole_number || hole.holeNumber,
+      ? dbCourse.holes.map((hole: any, index: number) => ({
+          holeNumber: index + 1, // Generate 1-based hole number from array index
           par: hole.par,
-          strokeIndex: hole.stroke_index || hole.strokeIndex,
+          strokeIndex: hole.strokeIndex || hole.stroke_index,
         }))
       : [],
     tournamentId: dbCourse.tournament_id,

@@ -135,6 +135,8 @@ export function PlayerScoreEntry({
             firstHole: foundCourse.holes?.[0],
           }
         : null,
+      totalCoursesAvailable: courses.length,
+      allCourseIds: courses.map((c) => ({ id: c.id, name: c.name, hasHoles: !!c.holes })),
     })
     return foundCourse
   }, [selectedGroup, courses])
@@ -532,7 +534,25 @@ export function PlayerScoreEntry({
     }, 100)
   }
 
-  const currentHoleData = course?.holes.find((h) => h.holeNumber === currentHole)
+  const currentHoleData = useMemo(() => {
+    if (!course?.holes) {
+      console.log("[v0] No holes data in course:", {
+        hasCourse: !!course,
+        courseId: course?.id,
+        courseName: course?.name,
+      })
+      return null
+    }
+    const holeData = course.holes.find((h) => h.holeNumber === currentHole)
+    console.log("[v0] Current hole data lookup:", {
+      currentHole,
+      foundHoleData: !!holeData,
+      availableHoles: course.holes.map((h) => h.holeNumber),
+      holeData,
+    })
+    return holeData
+  }, [course, currentHole])
+
   const player = players.find((p) => p.id === selectedPlayerId)
 
   const activeCompetitions = useMemo(() => {
