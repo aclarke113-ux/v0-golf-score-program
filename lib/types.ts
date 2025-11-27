@@ -51,6 +51,7 @@ export interface HoleScore {
   holeNumber: number
   strokes: number
   points: number
+  netScore?: number // Added net score for Net Score scoring format
   penalty?: number // Number of penalty strokes
 }
 
@@ -69,7 +70,7 @@ export interface Round {
 
 export interface Competition {
   id: string
-  type: "closest-to-pin" | "longest-drive"
+  type: "closest-to-pin" | "longest-drive" | "straightest-drive" // Added straightest-drive competition type
   holeNumber: number
   enabled: boolean
   day?: number
@@ -105,11 +106,9 @@ export interface Auction {
 }
 
 export interface PlayerCredit {
-  id?: string
   playerId: string
   credits: number
-  tournamentId: string
-  unlimitedCredits?: boolean // Added unlimited credits flag
+  tournamentId: string // Added to isolate credits per tournament
 }
 
 export interface Message {
@@ -123,7 +122,7 @@ export interface Message {
 
 export interface Post {
   id: string
-  userId: string
+  userId: string | null // Allow null for system posts like achievements
   userName: string
   mediaUrl: string
   mediaType: "image" | "video"
@@ -159,13 +158,14 @@ export interface Tournament {
   updatedAt: string
   numberOfDays: number
   hasPlayAroundDay: boolean
-  scoringType: "strokes" | "handicap" | "net" // Added "net" as a scoring type option
+  scoringType: "strokes" | "handicap" | "net-score" // Added net-score as a scoring type option
   hasCalcutta: boolean
   hasPick3: boolean
   calcuttaCloseTime?: string
   allowSpectatorChat?: boolean // Added spectator permission settings
   allowSpectatorFeed?: boolean
   allowSpectatorBetting?: boolean
+  infiniteBetting?: boolean // Added infinite betting toggle for unlimited credits
 }
 
 export interface Notification {

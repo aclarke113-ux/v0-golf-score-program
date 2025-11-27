@@ -13,11 +13,12 @@ import {
   getCompetitionsByTournament,
   getAuctionsByTournament,
   getPredictionsByTournament,
-  createTournament,
   createPlayer,
   getCreditsByTournament,
-  getRoundsByTournament, // Added import for getRoundsByTournament
+  getRoundsByTournament,
+  getTournamentById,
 } from "@/lib/supabase/db"
+import { initializeSupabase } from "@/lib/supabase/client"
 import type {
   User,
   Tournament,
@@ -56,6 +57,8 @@ export default function HomePage() {
   const [currentTournament, setCurrentTournament] = useState<Tournament | null>(null)
   const [showSplash, setShowSplash] = useState(true)
   const [loading, setLoading] = useState(false)
+  const [checkingSession, setCheckingSession] = useState(true)
+  const [supabaseReady, setSupabaseReady] = useState(false)
 
   // Tournament data loaded from Supabase
   const [players, setPlayers] = useState<Player[]>([])
@@ -72,29 +75,46 @@ export default function HomePage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
 
   useEffect(() => {
+    initializeSupabase()
+      .then(() => {
+        console.log("[v0] Supabase initialized successfully")
+        setSupabaseReady(true)
+      })
+      .catch((error) => {
+        console.error("[v0] Failed to initialize Supabase:", error)
+        alert("Failed to connect to database. Please refresh the page.")
+      })
+  }, [])
+
+  useEffect(() => {
     const loadSession = () => {
       try {
+        console.log("[v0] Checking for saved session...")
         const savedUser = localStorage.getItem("currentUser")
         const savedTournament = localStorage.getItem("currentTournament")
 
         if (savedUser && savedTournament) {
+          console.log("[v0] Found saved session, restoring...")
           setCurrentUser(JSON.parse(savedUser))
           setCurrentTournament(JSON.parse(savedTournament))
+        } else {
+          console.log("[v0] No saved session found")
         }
       } catch (error) {
         console.error("Error loading session:", error)
         localStorage.removeItem("currentUser")
         localStorage.removeItem("currentTournament")
+      } finally {
+        setCheckingSession(false)
       }
     }
 
     loadSession()
   }, [])
 
-  // Load tournament data when tournament changes
   useEffect(() => {
     const loadTournamentData = async () => {
-      if (!currentTournament) return
+      if (!currentTournament || !supabaseReady) return
 
       if (players.length === 0 && courses.length === 0 && groups.length === 0) {
         await refreshTournamentData()
@@ -102,19 +122,27 @@ export default function HomePage() {
     }
 
     loadTournamentData()
-  }, [currentTournament])
+  }, [currentTournament, supabaseReady])
 
   useEffect(() => {
-    if (!currentTournament) return
-
     const refreshRounds = async () => {
+      if (!currentTournament?.id || !supabaseReady) {
+        return
+      }
+
       try {
         const roundsData = await getRoundsByTournament(currentTournament.id)
         setRounds(roundsData as Round[])
       } catch (error) {
-        console.error("Error refreshing rounds:", error)
+        // Silently handle errors - don't spam console
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        if (!errorMessage.includes("configuration")) {
+          console.error("Error refreshing rounds:", error)
+        }
       }
     }
+
+    if (!currentTournament || !supabaseReady) return
 
     // Refresh immediately on mount
     refreshRounds()
@@ -123,7 +151,30 @@ export default function HomePage() {
     const interval = setInterval(refreshRounds, 15000)
 
     return () => clearInterval(interval)
-  }, [currentTournament])
+  }, [currentTournament, supabaseReady])
+
+  const refreshTournament = async () => {
+    if (!currentTournament?.id || !supabaseReady) return
+
+    try {
+      const updatedTournament = await getTournamentById(currentTournament.id)
+
+      if (updatedTournament) {
+        console.log("[v0] Refreshed tournament data:", updatedTournament)
+        setCurrentTournament(updatedTournament as Tournament)
+        localStorage.setItem("currentTournament", JSON.stringify(updatedTournament))
+      }
+    } catch (error) {
+      console.error("Error refreshing tournament:", error)
+    }
+  }
+
+  useEffect(() => {
+    if (!currentTournament?.id || !supabaseReady) return
+
+    const interval = setInterval(refreshTournament, 30000)
+    return () => clearInterval(interval)
+  }, [currentTournament?.id, supabaseReady])
 
   const generateTournamentCode = () => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -139,20 +190,25 @@ export default function HomePage() {
     try {
       const code = generateTournamentCode()
 
-      const newTournament = await createTournament({
-        name,
-        code,
-        password,
-        adminPassword,
-        numberOfDays: 2,
-        hasPlayAroundDay: false,
-        scoringType: "handicap",
-        hasCalcutta: true,
-        hasPick3: true,
-        allowSpectatorChat: true,
-        allowSpectatorFeed: true,
-        allowSpectatorBetting: false,
+      const response = await fetch("/api/tournaments/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          code,
+          password,
+          adminPassword,
+        }),
       })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to create tournament")
+      }
+
+      const newTournament = await response.json()
 
       const creatorPlayer = await createPlayer({
         name: creatorName,
@@ -235,9 +291,11 @@ export default function HomePage() {
   }
 
   const refreshTournamentData = async () => {
-    if (!currentTournament) return
+    if (!currentTournament || !supabaseReady) return
 
     try {
+      await refreshTournament()
+
       const [
         playersData,
         coursesData,
@@ -255,7 +313,7 @@ export default function HomePage() {
         getPredictionsByTournament(currentTournament.id),
         getAuctionsByTournament(currentTournament.id),
         getCreditsByTournament(currentTournament.id),
-        getRoundsByTournament(currentTournament.id), // Added loading rounds for tournament
+        getRoundsByTournament(currentTournament.id),
       ])
 
       setPlayers(playersData as Player[])
@@ -265,7 +323,7 @@ export default function HomePage() {
       setPredictions(predictionsData as Prediction[])
       setAuctions(auctionsData as Auction[])
       setPlayerCredits(creditsData as PlayerCredit[])
-      setRounds(roundsData as Round[]) // Added set rounds state with loaded data
+      setRounds(roundsData as Round[])
     } catch (error) {
       console.error("Error refreshing tournament data:", error)
     }
@@ -273,6 +331,20 @@ export default function HomePage() {
 
   if (showSplash) {
     return <SplashScreen onComplete={() => setShowSplash(false)} />
+  }
+
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-950">
+        <div className="text-center">
+          <div className="mb-6">
+            <div className="w-20 h-20 mx-auto border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+          </div>
+          <p className="text-2xl font-bold text-white mb-2">Loading...</p>
+          <p className="text-emerald-200">Checking your session</p>
+        </div>
+      </div>
+    )
   }
 
   if (loading) {

@@ -6,7 +6,7 @@ import { Bell, BellOff } from "lucide-react"
 import { pushManager } from "@/lib/notifications/push-manager"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
-export function PushNotificationSetup() {
+export function PushNotificationSetup({ userId, tournamentId }: { userId: string; tournamentId: string }) {
   const [permission, setPermission] = useState<NotificationPermission>("default")
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -22,19 +22,31 @@ export function PushNotificationSetup() {
 
     setPermission(Notification.permission)
 
-    const subscription = await pushManager.getSubscription()
-    setIsSubscribed(!!subscription)
+    try {
+      if ("serviceWorker" in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration()
+        if (registration) {
+          const subscription = await registration.pushManager.getSubscription()
+          setIsSubscribed(!!subscription)
+        }
+      }
+    } catch (error) {
+      // Silently fail - service worker might not be available in preview environment
+      console.log("[v0] Could not check subscription status:", error)
+    }
   }
 
   const handleEnableNotifications = async () => {
     setIsLoading(true)
     try {
+      // Initialize service worker
       const initialized = await pushManager.initialize()
       if (!initialized) {
         alert("Push notifications are not supported in your browser")
         return
       }
 
+      // Request permission
       const perm = await pushManager.requestPermission()
       setPermission(perm)
 
@@ -43,6 +55,7 @@ export function PushNotificationSetup() {
         return
       }
 
+      // Subscribe to push
       const subscription = await pushManager.subscribe()
       if (!subscription) {
         alert("Failed to subscribe to notifications")
@@ -52,14 +65,16 @@ export function PushNotificationSetup() {
       const response = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subscription: subscription.toJSON() }),
+        body: JSON.stringify({
+          subscription: subscription.toJSON(),
+          userId,
+          tournamentId,
+        }),
       })
 
       if (response.ok) {
         setIsSubscribed(true)
-        alert(
-          "Push notifications enabled! You'll receive updates for feed posts, achievements, tee times, and chat messages.",
-        )
+        alert("Push notifications enabled! You'll receive updates for chat messages and achievements.")
       } else {
         alert("Failed to save notification settings")
       }
@@ -76,12 +91,14 @@ export function PushNotificationSetup() {
     try {
       const subscription = await pushManager.getSubscription()
       if (subscription) {
+        // Remove from server
         await fetch("/api/push/subscribe", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ subscription: subscription.toJSON() }),
         })
 
+        // Unsubscribe locally
         await pushManager.unsubscribe()
         setIsSubscribed(false)
         alert("Push notifications disabled")
@@ -106,8 +123,8 @@ export function PushNotificationSetup() {
           Push Notifications
         </CardTitle>
         <CardDescription>
-          Get notifications for feed posts, achievements, tee times, and chat messages. Everything is set up
-          automatically - just click enable!
+          Get lock screen and banner notifications for new messages and tee times. Everything is set up automatically -
+          just click enable!
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -119,7 +136,7 @@ export function PushNotificationSetup() {
           <div className="space-y-2">
             <p className="text-sm text-green-600 font-medium">✓ Push notifications enabled</p>
             <p className="text-xs text-muted-foreground">
-              You'll receive notifications for feed posts, achievements, tee times, and chat messages.
+              You'll receive notifications on your lock screen for new chat messages and upcoming tee times.
             </p>
             <Button variant="outline" size="sm" onClick={handleDisableNotifications} disabled={isLoading}>
               <BellOff className="h-4 w-4 mr-2" />

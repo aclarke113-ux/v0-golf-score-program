@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Plus, Pencil, Trash2, MapPin } from "lucide-react"
 import { createCourse, updateCourse, deleteCourse as deleteCourseFn, getCoursesByTournament } from "@/lib/supabase/db"
+import { AustralianCourseSelector } from "@/components/admin/australian-course-selector"
 import type { Course, Hole } from "@/app/page"
 
 type CourseManagementProps = {
@@ -17,6 +18,7 @@ export function CourseManagement({ currentTournamentId }: CourseManagementProps)
   const [courses, setCourses] = useState<Course[]>([])
   const [newCourseName, setNewCourseName] = useState("")
   const [newCourseHoles, setNewCourseHoles] = useState("18")
+  const [showAustralianCourses, setShowAustralianCourses] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
   const [editHoles, setEditHoles] = useState<Hole[]>([])
@@ -160,14 +162,77 @@ export function CourseManagement({ currentTournamentId }: CourseManagementProps)
     setEditHoles(editHoles.map((h) => (h.holeNumber === holeNumber ? { ...h, strokeIndex } : h)))
   }
 
+  const handleAustralianCourseSelected = async (australianCourse: any) => {
+    if (!currentTournamentId) return
+
+    setLoading(true)
+    try {
+      const holes: Hole[] = australianCourse.holes.map((h: any) => ({
+        holeNumber: h.number,
+        par: h.par,
+        strokeIndex: h.strokeIndex,
+      }))
+
+      await createCourse({
+        name: australianCourse.name,
+        holes,
+        tournamentId: currentTournamentId,
+      })
+
+      const updatedCourses = await getCoursesByTournament(currentTournamentId)
+      setCourses(updatedCourses as Course[])
+
+      setShowAustralianCourses(false)
+    } catch (error) {
+      console.error("Error adding Australian course:", error)
+      alert("Failed to add course. Please try again.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Add New Course</CardTitle>
-          <CardDescription>Add golf courses with hole-by-hole par information</CardDescription>
+          <CardDescription>
+            Search Australian courses or add custom courses with hole-by-hole par information
+          </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-4">
+            <Button
+              onClick={() => setShowAustralianCourses(!showAustralianCourses)}
+              variant={showAustralianCourses ? "secondary" : "default"}
+              className="w-full"
+              disabled={loading}
+            >
+              <MapPin className="mr-2 h-4 w-4" />
+              {showAustralianCourses ? "Hide" : "Search"} Australian Courses
+            </Button>
+          </div>
+
+          {showAustralianCourses && currentTournamentId && (
+            <div className="mb-6 p-4 border rounded-lg bg-muted/50">
+              <AustralianCourseSelector
+                tournamentId={currentTournamentId}
+                onCourseSelected={handleAustralianCourseSelected}
+              />
+            </div>
+          )}
+
+          {showAustralianCourses && (
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or create custom course</span>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2">
               <Label htmlFor="course-name">Course Name</Label>

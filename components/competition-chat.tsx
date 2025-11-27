@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Send, MessageCircle } from "lucide-react"
-import { createMessage, getMessagesByTournament } from "@/lib/supabase/db"
+import { createMessage, getMessagesByTournament, createNotification, getPlayersByTournament } from "@/lib/supabase/db"
 import { subscribeToMessages, unsubscribe } from "@/lib/supabase/realtime"
+import { sendPushNotification } from "@/lib/notifications/push-sender"
 import type { Message } from "@/lib/types"
 
 type CompetitionChatProps = {
@@ -66,6 +67,36 @@ export function CompetitionChat({ currentUserId, currentUserName, tournamentId }
         userName: currentUserName,
         content: newMessage.trim(),
       })
+
+      try {
+        const players = await getPlayersByTournament(tournamentId)
+        const otherPlayers = players.filter((p) => p.id !== currentUserId)
+
+        // Create notification for each player
+        await Promise.all(
+          otherPlayers.map((player) =>
+            createNotification({
+              tournamentId,
+              playerId: player.id,
+              type: "chat",
+              title: `New message from ${currentUserName}`,
+              message: newMessage.trim().substring(0, 100),
+              read: false,
+            }),
+          ),
+        )
+
+        await sendPushNotification({
+          tournamentId,
+          title: `💬 ${currentUserName}`,
+          message: newMessage.trim().substring(0, 100),
+          excludeUserId: currentUserId,
+        })
+
+        console.log("[v0] Push notifications sent for chat message")
+      } catch (notifError) {
+        console.error("[v0] Error creating chat notifications:", notifError)
+      }
 
       setNewMessage("")
       await loadMessages()

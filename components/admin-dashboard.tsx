@@ -13,6 +13,7 @@ import { CompetitionManagement } from "@/components/competition-management"
 import { AdminPredictions } from "@/components/admin-predictions"
 import { AdminAuction } from "@/components/admin-auction"
 import { TournamentSettings } from "@/components/tournament-settings"
+import { GenerateAchievementsButton } from "@/components/admin/generate-achievements-button"
 import type {
   Player,
   Course,
@@ -141,12 +142,23 @@ export function AdminDashboard({
             </div>
           )}
 
+          {currentTournament && rounds.length > 0 && (
+            <div className="mb-6">
+              <GenerateAchievementsButton
+                tournament={currentTournament}
+                rounds={rounds}
+                players={players}
+                courses={courses}
+              />
+            </div>
+          )}
+
           <div className="mb-8 bg-gradient-to-r from-[#2D5016] to-[#1a3a0f] text-primary-foreground p-6 rounded-lg shadow-2xl border-2 border-[#FFD700]/20">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <Trophy className="w-10 h-10 text-[#FFD700]" />
                 <div>
-                  <h1 className="text-4xl font-bold text-[#F5F1E8]">Aussie Golf</h1>
+                  <h1 className="text-4xl font-bold text-[#F5F1E8]">Aussie Slice</h1>
                   <p className="text-[#F5F1E8]/80">
                     {currentTournament?.name || "Tournament"} - Admin: {currentUser.name}
                   </p>
@@ -364,6 +376,7 @@ export function AdminDashboard({
                 groups={groups}
                 rounds={rounds}
                 tournamentId={currentTournament?.id}
+                tournament={currentTournament} // Added tournament prop to AdminLeaderboard
               />
             </TabsContent>
 

@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { DollarSign, Gavel, Trophy, TrendingUp, Lock, Crown, Wallet, AlertCircle } from "lucide-react"
+import { DollarSign, Gavel, Trophy, TrendingUp, Lock, Crown, Wallet, AlertCircle, Infinity } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import type { Player, Auction, User, Round, Group, PlayerCredit, Tournament } from "@/app/page"
 import { subscribeToAuctions, unsubscribe } from "@/lib/supabase/realtime"
@@ -37,6 +37,8 @@ export function CalcuttaAuction({
   const [bidAmount, setBidAmount] = useState<string>("")
   const [refreshKey, setRefreshKey] = useState(0)
 
+  const hasInfiniteBetting = currentTournament?.infiniteBetting ?? false
+
   useEffect(() => {
     if (!currentTournament?.id) return
 
@@ -62,7 +64,7 @@ export function CalcuttaAuction({
     return userAuction?.bidAmount || 0
   }, [auctions, currentUser.id, refreshKey])
 
-  const availableCredit = userCredit - userTotalBids
+  const availableCredit = hasInfiniteBetting ? 999999 : userCredit - userTotalBids
 
   const userOwnedGolfer = useMemo(() => {
     const userAuction = auctions.find((a) => a.buyerId === currentUser.id)
@@ -186,7 +188,7 @@ export function CalcuttaAuction({
       return
     }
 
-    if (amount > availableCredit) {
+    if (!hasInfiniteBetting && amount > availableCredit) {
       alert(`Insufficient credit. You have ${availableCredit.toFixed(2)} credits available.`)
       return
     }
@@ -336,14 +338,27 @@ export function CalcuttaAuction({
 
   return (
     <div className="h-full overflow-y-auto pb-4 space-y-4">
-      <Card className="border-2 border-blue-500 bg-blue-50 dark:bg-blue-950">
+      <Card
+        className={`border-2 ${hasInfiniteBetting ? "border-green-500 bg-green-50 dark:bg-green-950" : "border-blue-500 bg-blue-50 dark:bg-blue-950"}`}
+      >
         <CardContent className="pt-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Wallet className="w-6 h-6 text-blue-600" />
+              {hasInfiniteBetting ? (
+                <Infinity className="w-6 h-6 text-green-600" />
+              ) : (
+                <Wallet className="w-6 h-6 text-blue-600" />
+              )}
               <div>
                 <p className="text-sm text-muted-foreground">Your Credit Balance</p>
-                <p className="text-3xl font-bold text-blue-600">{availableCredit.toFixed(2)}</p>
+                {hasInfiniteBetting ? (
+                  <div className="flex items-center gap-2">
+                    <p className="text-3xl font-bold text-green-600">Unlimited</p>
+                    <Infinity className="w-6 h-6 text-green-600" />
+                  </div>
+                ) : (
+                  <p className="text-3xl font-bold text-blue-600">{availableCredit.toFixed(2)}</p>
+                )}
               </div>
             </div>
             {userOwnedGolfer && (
@@ -356,6 +371,16 @@ export function CalcuttaAuction({
           </div>
         </CardContent>
       </Card>
+
+      {hasInfiniteBetting && (
+        <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
+          <Infinity className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-sm">
+            <strong>Infinite Betting Mode:</strong> You have unlimited credits for this tournament. Place bids without
+            limits!
+          </AlertDescription>
+        </Alert>
+      )}
 
       {currentTournament?.auctionNotes && (
         <Alert>
@@ -390,11 +415,11 @@ export function CalcuttaAuction({
               <li>• All entries go into the prize pool</li>
               <li>• Owner of the winning golfer takes the entire pot</li>
               <li>• You can upgrade your entry on your golfer</li>
-              <li>• Unused credit refunded after competition</li>
+              {!hasInfiniteBetting && <li>• Unused credit refunded after competition</li>}
             </ul>
           </div>
 
-          {availableCredit < 5 && (
+          {!hasInfiniteBetting && availableCredit < 5 && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
@@ -452,14 +477,27 @@ export function CalcuttaAuction({
                   className="pl-9"
                   step="5"
                   min="5"
-                  max={availableCredit}
+                  max={hasInfiniteBetting ? undefined : availableCredit}
                 />
               </div>
-              <p className="text-xs text-muted-foreground">Available credit: {availableCredit.toFixed(2)} credits</p>
+              <p className="text-xs text-muted-foreground">
+                {hasInfiniteBetting ? (
+                  <span className="flex items-center gap-1 text-green-600">
+                    <Infinity className="w-3 h-3" /> Unlimited credits available
+                  </span>
+                ) : (
+                  `Available credit: ${availableCredit.toFixed(2)} credits`
+                )}
+              </p>
             </div>
           </div>
 
-          <Button onClick={handlePlaceBid} className="w-full" size="lg" disabled={availableCredit < 5}>
+          <Button
+            onClick={handlePlaceBid}
+            className="w-full"
+            size="lg"
+            disabled={!hasInfiniteBetting && availableCredit < 5}
+          >
             <Gavel className="w-4 h-4 mr-2" />
             {userOwnedGolfer ? "Upgrade Entry" : "Place Entry"}
           </Button>

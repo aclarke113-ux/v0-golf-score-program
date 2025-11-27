@@ -117,8 +117,11 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    border-color: oklch(0.922 0 0);
   }
   body {
     @apply bg-background text-foreground;
+    background: oklch(1 0 0);
+    color: oklch(0.145 0 0);
   }
 }

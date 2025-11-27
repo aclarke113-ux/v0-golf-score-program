@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/client"
+import { createClient, createServiceRoleClient } from "@/lib/supabase/client"
 import type {
   Tournament,
   Player,
@@ -17,7 +17,7 @@ import type {
 } from "@/lib/types"
 
 // Helper to get Supabase client
-const getClient = () => createClient()
+const getClient = async () => await createClient()
 
 const generateId = () => crypto.randomUUID()
 
@@ -36,6 +36,7 @@ const transformTournament = (dbTournament: any): Tournament => ({
   allowSpectatorChat: dbTournament.allow_spectator_chat ?? true,
   allowSpectatorFeed: dbTournament.allow_spectator_feed ?? true,
   allowSpectatorBetting: dbTournament.allow_spectator_betting ?? true,
+  infiniteBetting: dbTournament.infinite_betting ?? false,
   createdAt: dbTournament.created_at,
   updatedAt: dbTournament.updated_at,
 })
@@ -111,7 +112,7 @@ const transformCompetition = (dbComp: any): Competition => ({
   id: dbComp.id,
   type: dbComp.type,
   holeNumber: dbComp.hole_number,
-  enabled: true, // Always true since existence means enabled
+  enabled: dbComp.enabled ?? true,
   day: dbComp.day,
   courseId: dbComp.course_id,
   tournamentId: dbComp.tournament_id,
@@ -149,7 +150,6 @@ const transformPlayerCredit = (dbCredit: any): PlayerCredit => ({
   playerId: dbCredit.player_id,
   credits: dbCredit.credits,
   tournamentId: dbCredit.tournament_id,
-  unlimitedCredits: dbCredit.unlimited_credits || false,
 })
 
 const transformChampionship = (dbChamp: any): Championship => ({
@@ -200,7 +200,7 @@ const transformPost = (dbPost: any): Post => ({
 // ============================================================================
 
 export async function createTournament(tournament: Omit<Tournament, "id" | "createdAt" | "updatedAt">) {
-  const supabase = getClient()
+  const supabase = await createServiceRoleClient()
 
   const insertData: any = {
     id: generateId(),
@@ -227,6 +227,9 @@ export async function createTournament(tournament: Omit<Tournament, "id" | "crea
   if (tournament.allowSpectatorBetting !== undefined) {
     insertData.allow_spectator_betting = tournament.allowSpectatorBetting
   }
+  if (tournament.infiniteBetting !== undefined) {
+    insertData.infinite_betting = tournament.infiniteBetting
+  }
 
   const { data, error } = await supabase.from("tournaments").insert(insertData).select().single()
 
@@ -235,7 +238,7 @@ export async function createTournament(tournament: Omit<Tournament, "id" | "crea
 }
 
 export async function getTournamentByCode(code: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase.from("tournaments").select("*").eq("code", code).single()
 
   if (error) return null
@@ -243,7 +246,7 @@ export async function getTournamentByCode(code: string) {
 }
 
 export async function getTournamentById(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase.from("tournaments").select("*").eq("id", id).single()
 
   if (error) return null
@@ -251,7 +254,7 @@ export async function getTournamentById(id: string) {
 }
 
 export async function updateTournament(id: string, updates: Partial<Tournament>) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const updateData: any = {}
   if (updates.name !== undefined) updateData.name = updates.name
   if (updates.password !== undefined) updateData.password = updates.password
@@ -265,6 +268,7 @@ export async function updateTournament(id: string, updates: Partial<Tournament>)
   if (updates.allowSpectatorChat !== undefined) updateData.allow_spectator_chat = updates.allowSpectatorChat
   if (updates.allowSpectatorFeed !== undefined) updateData.allow_spectator_feed = updates.allowSpectatorFeed
   if (updates.allowSpectatorBetting !== undefined) updateData.allow_spectator_betting = updates.allowSpectatorBetting
+  if (updates.infiniteBetting !== undefined) updateData.infinite_betting = updates.infiniteBetting
 
   if (Object.keys(updateData).length === 0) {
     console.log("[v0] No fields to update, returning existing tournament")
@@ -279,7 +283,7 @@ export async function updateTournament(id: string, updates: Partial<Tournament>)
 }
 
 export async function getAllTournaments() {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase.from("tournaments").select("*").order("created_at", { ascending: false })
 
   if (error) return []
@@ -291,7 +295,7 @@ export async function getAllTournaments() {
 // ============================================================================
 
 export async function createPlayer(player: Omit<Player, "id" | "createdAt" | "updatedAt">) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("players")
     .insert({
@@ -313,7 +317,7 @@ export async function createPlayer(player: Omit<Player, "id" | "createdAt" | "up
 }
 
 export async function getPlayersByTournament(tournamentId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase.from("players").select("*").eq("tournament_id", tournamentId).order("name")
 
   if (error) return []
@@ -321,7 +325,7 @@ export async function getPlayersByTournament(tournamentId: string) {
 }
 
 export async function getPlayerById(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase.from("players").select("*").eq("id", id).single()
 
   if (error) return null
@@ -329,7 +333,7 @@ export async function getPlayerById(id: string) {
 }
 
 export async function updatePlayer(id: string, updates: Partial<Player>) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const updateData: any = {}
 
   if (updates.name !== undefined) updateData.name = updates.name
@@ -347,7 +351,7 @@ export async function updatePlayer(id: string, updates: Partial<Player>) {
 }
 
 export async function deletePlayer(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { error } = await supabase.from("players").delete().eq("id", id)
 
   if (error) throw error
@@ -358,7 +362,7 @@ export async function deletePlayer(id: string) {
 // ============================================================================
 
 export async function createCourse(course: Omit<Course, "id" | "createdAt">) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("courses")
     .insert({
@@ -375,7 +379,7 @@ export async function createCourse(course: Omit<Course, "id" | "createdAt">) {
 }
 
 export async function getCoursesByTournament(tournamentId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase.from("courses").select("*").eq("tournament_id", tournamentId).order("name")
 
   if (error) return []
@@ -383,7 +387,7 @@ export async function getCoursesByTournament(tournamentId: string) {
 }
 
 export async function getCourseById(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase.from("courses").select("*").eq("id", id).single()
 
   if (error) return null
@@ -391,7 +395,7 @@ export async function getCourseById(id: string) {
 }
 
 export async function updateCourse(id: string, updates: Partial<Course>) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("courses")
     .update({
@@ -407,7 +411,7 @@ export async function updateCourse(id: string, updates: Partial<Course>) {
 }
 
 export async function deleteCourse(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { error } = await supabase.from("courses").delete().eq("id", id)
 
   if (error) throw error
@@ -418,7 +422,7 @@ export async function deleteCourse(id: string) {
 // ============================================================================
 
 export async function createGroup(group: Omit<Group, "id" | "createdAt">) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("groups")
     .insert({
@@ -440,7 +444,7 @@ export async function createGroup(group: Omit<Group, "id" | "createdAt">) {
 }
 
 export async function getGroupsByTournament(tournamentId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("groups")
     .select("*")
@@ -453,7 +457,7 @@ export async function getGroupsByTournament(tournamentId: string) {
 }
 
 export async function getGroupById(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase.from("groups").select("*").eq("id", id).single()
 
   if (error) return null
@@ -461,7 +465,7 @@ export async function getGroupById(id: string) {
 }
 
 export async function updateGroup(id: string, updates: Partial<Group>) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const updateData: any = {}
   if (updates.name !== undefined) updateData.name = updates.name
   if (updates.day !== undefined) updateData.day = updates.day
@@ -478,7 +482,7 @@ export async function updateGroup(id: string, updates: Partial<Group>) {
 }
 
 export async function deleteGroup(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { error } = await supabase.from("groups").delete().eq("id", id)
 
   if (error) throw error
@@ -489,7 +493,7 @@ export async function deleteGroup(id: string) {
 // ============================================================================
 
 export async function createRound(round: Omit<Round, "id" | "createdAt" | "updatedAt">) {
-  const supabase = getClient()
+  const supabase = await getClient()
 
   // Convert HoleScore array to database format
   const scoresJson = round.holes.map((hole) => ({
@@ -518,7 +522,7 @@ export async function createRound(round: Omit<Round, "id" | "createdAt" | "updat
 }
 
 export async function getRoundsByPlayer(playerId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase.from("rounds").select("*").eq("player_id", playerId).order("day")
 
   if (error) return []
@@ -526,7 +530,7 @@ export async function getRoundsByPlayer(playerId: string) {
 }
 
 export async function getRoundByPlayerAndDay(playerId: string, day: number) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase.from("rounds").select("*").eq("player_id", playerId).eq("day", day).single()
 
   if (error) return null
@@ -534,7 +538,7 @@ export async function getRoundByPlayerAndDay(playerId: string, day: number) {
 }
 
 export async function getRoundsByGroup(groupId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase.from("rounds").select("*").eq("group_id", groupId).order("day")
 
   if (error) return []
@@ -542,7 +546,7 @@ export async function getRoundsByGroup(groupId: string) {
 }
 
 export async function getRoundsByTournament(tournamentId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
 
   // Get all groups for this tournament first
   const { data: groups, error: groupsError } = await supabase
@@ -562,7 +566,7 @@ export async function getRoundsByTournament(tournamentId: string) {
 }
 
 export async function updateRound(id: string, updates: Partial<Round>) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const updateData: any = {}
 
   if (updates.holes !== undefined) {
@@ -584,7 +588,7 @@ export async function updateRound(id: string, updates: Partial<Round>) {
 }
 
 export async function deleteRound(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { error } = await supabase.from("rounds").delete().eq("id", id)
 
   if (error) throw error
@@ -595,7 +599,7 @@ export async function deleteRound(id: string) {
 // ============================================================================
 
 export async function createCompetition(competition: Omit<Competition, "id" | "createdAt">) {
-  const supabase = getClient()
+  const supabase = await getClient()
 
   console.log("[v0] Creating competition:", {
     type: competition.type,
@@ -630,7 +634,7 @@ export async function createCompetition(competition: Omit<Competition, "id" | "c
 }
 
 export async function getCompetitionsByTournament(tournamentId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase.from("competitions").select("*").eq("tournament_id", tournamentId).order("day")
 
   if (error) return []
@@ -638,7 +642,7 @@ export async function getCompetitionsByTournament(tournamentId: string) {
 }
 
 export async function updateCompetition(id: string, updates: Partial<Competition>) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const updateData: any = {}
   if (updates.type !== undefined) updateData.type = updates.type
   if (updates.day !== undefined) updateData.day = updates.day
@@ -652,7 +656,7 @@ export async function updateCompetition(id: string, updates: Partial<Competition
 }
 
 export async function deleteCompetition(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { error } = await supabase.from("competitions").delete().eq("id", id)
 
   if (error) throw error
@@ -663,7 +667,7 @@ export async function deleteCompetition(id: string) {
 // ============================================================================
 
 export async function createCompetitionEntry(entry: Omit<CompetitionEntry, "id" | "createdAt">) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("competition_entries")
     .insert({
@@ -682,7 +686,7 @@ export async function createCompetitionEntry(entry: Omit<CompetitionEntry, "id" 
 }
 
 export async function getEntriesByCompetition(competitionId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("competition_entries")
     .select("*")
@@ -694,7 +698,7 @@ export async function getEntriesByCompetition(competitionId: string) {
 }
 
 export async function updateCompetitionEntry(id: string, distance: number) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase.from("competition_entries").update({ distance }).eq("id", id).select().single()
 
   if (error) throw error
@@ -702,7 +706,7 @@ export async function updateCompetitionEntry(id: string, distance: number) {
 }
 
 export async function deleteCompetitionEntry(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { error } = await supabase.from("competition_entries").delete().eq("id", id)
 
   if (error) throw error
@@ -713,7 +717,7 @@ export async function deleteCompetitionEntry(id: string) {
 // ============================================================================
 
 export async function createMessage(message: Omit<Message, "id" | "timestamp">) {
-  const supabase = getClient()
+  const supabase = await getClient()
 
   console.log("[v0] createMessage called with:", {
     tournamentId: message.tournamentId,
@@ -742,7 +746,7 @@ export async function createMessage(message: Omit<Message, "id" | "timestamp">) 
 }
 
 export async function getMessagesByTournament(tournamentId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("messages")
     .select("*")
@@ -758,13 +762,13 @@ export async function getMessagesByTournament(tournamentId: string) {
 // ============================================================================
 
 export async function createPost(post: Omit<Post, "id" | "timestamp">) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("posts")
     .insert({
       id: generateId(),
       tournament_id: post.tournamentId,
-      player_id: post.userId,
+      player_id: post.userId, // Can be null for system posts
       player_name: post.userName,
       content: post.caption,
       media_url: post.mediaUrl,
@@ -778,26 +782,36 @@ export async function createPost(post: Omit<Post, "id" | "timestamp">) {
 }
 
 export async function getPostsByTournament(tournamentId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
+  console.log("[v0] Fetching posts from database for tournament:", tournamentId)
   const { data, error } = await supabase
     .from("posts")
     .select("*")
     .eq("tournament_id", tournamentId)
     .order("timestamp", { ascending: false })
 
-  if (error) return []
-  return data.map(transformPost)
+  if (error) {
+    console.error("[v0] Error fetching posts:", error)
+    return []
+  }
+
+  console.log("[v0] Raw posts from database:", data?.length || 0)
+
+  if (data) {
+    return data.map(transformPost)
+  }
+  return []
 }
 
 export async function deletePost(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { error } = await supabase.from("posts").delete().eq("id", id)
 
   if (error) throw error
 }
 
 export async function togglePostLike(postId: string, playerId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
 
   // Get current liked_by array
   const { data: post, error: fetchError } = await supabase.from("posts").select("liked_by").eq("id", postId).single()
@@ -827,7 +841,7 @@ export async function createComment(comment: {
   playerName: string
   content: string
 }) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("comments")
     .insert({
@@ -850,7 +864,7 @@ export async function createComment(comment: {
 }
 
 export async function getCommentsByPost(postId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("comments")
     .select("*")
@@ -871,7 +885,7 @@ export async function getCommentsByPost(postId: string) {
 // ============================================================================
 
 export async function createAuction(auction: Omit<Auction, "id" | "createdAt">) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("auctions")
     .insert({
@@ -889,7 +903,7 @@ export async function createAuction(auction: Omit<Auction, "id" | "createdAt">) 
 }
 
 export async function getAuctionsByTournament(tournamentId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase.from("auctions").select("*").eq("tournament_id", tournamentId)
 
   if (error) return []
@@ -897,7 +911,7 @@ export async function getAuctionsByTournament(tournamentId: string) {
 }
 
 export async function updateAuction(id: string, updates: Partial<Auction>) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const updateData: any = {}
   if (updates.bidderId !== undefined) updateData.buyer_player_id = updates.bidderId
   if (updates.amount !== undefined) updateData.amount = updates.amount
@@ -909,7 +923,7 @@ export async function updateAuction(id: string, updates: Partial<Auction>) {
 }
 
 export async function deleteAuction(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { error } = await supabase.from("auctions").delete().eq("id", id)
 
   if (error) throw error
@@ -920,7 +934,7 @@ export async function deleteAuction(id: string) {
 // ============================================================================
 
 export async function createPrediction(prediction: Omit<Prediction, "id" | "createdAt">) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("predictions")
     .insert({
@@ -937,7 +951,7 @@ export async function createPrediction(prediction: Omit<Prediction, "id" | "crea
 }
 
 export async function getPredictionsByTournament(tournamentId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase.from("predictions").select("*").eq("tournament_id", tournamentId)
 
   if (error) return []
@@ -945,7 +959,7 @@ export async function getPredictionsByTournament(tournamentId: string) {
 }
 
 export async function updatePrediction(id: string, predictedPlayerIds: string[]) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("predictions")
     .update({ predicted_player_ids: predictedPlayerIds })
@@ -958,7 +972,7 @@ export async function updatePrediction(id: string, predictedPlayerIds: string[])
 }
 
 export async function deletePrediction(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { error } = await supabase.from("predictions").delete().eq("id", id)
 
   if (error) throw error
@@ -969,7 +983,7 @@ export async function deletePrediction(id: string) {
 // ============================================================================
 
 export async function createPlayerCredit(credit: Omit<PlayerCredit, "id" | "createdAt" | "updatedAt">) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("player_credits")
     .insert({
@@ -977,7 +991,6 @@ export async function createPlayerCredit(credit: Omit<PlayerCredit, "id" | "crea
       tournament_id: credit.tournamentId,
       player_id: credit.playerId,
       credits: credit.credits,
-      unlimited_credits: credit.unlimitedCredits || false,
     })
     .select()
     .single()
@@ -987,7 +1000,7 @@ export async function createPlayerCredit(credit: Omit<PlayerCredit, "id" | "crea
 }
 
 export async function getCreditsByTournament(tournamentId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase.from("player_credits").select("*").eq("tournament_id", tournamentId)
 
   if (error) return []
@@ -995,7 +1008,7 @@ export async function getCreditsByTournament(tournamentId: string) {
 }
 
 export async function getCreditByPlayer(playerId: string, tournamentId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("player_credits")
     .select("*")
@@ -1008,10 +1021,9 @@ export async function getCreditByPlayer(playerId: string, tournamentId: string) 
 }
 
 export async function updatePlayerCredit(id: string, updates: Partial<PlayerCredit>) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const updateData: any = {}
   if (updates.credits !== undefined) updateData.credits = updates.credits
-  if (updates.unlimitedCredits !== undefined) updateData.unlimited_credits = updates.unlimitedCredits
 
   const { data, error } = await supabase.from("player_credits").update(updateData).eq("id", id).select().single()
 
@@ -1020,7 +1032,7 @@ export async function updatePlayerCredit(id: string, updates: Partial<PlayerCred
 }
 
 export async function deletePlayerCredit(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { error } = await supabase.from("player_credits").delete().eq("id", id)
 
   if (error) throw error
@@ -1031,7 +1043,7 @@ export async function deletePlayerCredit(id: string) {
 // ============================================================================
 
 export async function createChampionship(championship: Omit<Championship, "id" | "createdAt">) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("championships")
     .insert({
@@ -1049,7 +1061,7 @@ export async function createChampionship(championship: Omit<Championship, "id" |
 }
 
 export async function getChampionshipsByTournament(tournamentId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("championships")
     .select("*")
@@ -1061,7 +1073,7 @@ export async function getChampionshipsByTournament(tournamentId: string) {
 }
 
 export async function deleteChampionship(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { error } = await supabase.from("championships").delete().eq("id", id)
 
   if (error) throw error
@@ -1072,7 +1084,7 @@ export async function deleteChampionship(id: string) {
 // ============================================================================
 
 export async function createNotification(notification: Omit<Notification, "id" | "timestamp">) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("notifications")
     .insert({
@@ -1092,7 +1104,7 @@ export async function createNotification(notification: Omit<Notification, "id" |
 }
 
 export async function getNotificationsByPlayer(playerId: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { data, error } = await supabase
     .from("notifications")
     .select("*")
@@ -1104,14 +1116,14 @@ export async function getNotificationsByPlayer(playerId: string) {
 }
 
 export async function markNotificationAsRead(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { error } = await supabase.from("notifications").update({ read: true }).eq("id", id)
 
   if (error) throw error
 }
 
 export async function deleteNotification(id: string) {
-  const supabase = getClient()
+  const supabase = await getClient()
   const { error } = await supabase.from("notifications").delete().eq("id", id)
 
   if (error) throw error

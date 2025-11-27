@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ChevronLeft, ChevronRight, Check, Lock, Target, TrendingUp } from "lucide-react"
+import { ChevronLeft, ChevronRight, Check, Lock, Target, TrendingUp, Navigation } from "lucide-react"
 import { Users } from "lucide-react"
 import type {
   Player,
@@ -26,7 +26,10 @@ import {
   createCompetitionEntry,
   updateCompetitionEntry,
   getEntriesByCompetition,
+  createNotification,
 } from "@/lib/supabase/db"
+import { detectAchievements, postAchievement, checkAndPostCompetitionAchievement } from "@/lib/achievements"
+import { PlayCircle } from "lucide-react"
 
 type PlayerScoreEntryProps = {
   currentUser: User
@@ -63,6 +66,10 @@ function getHandicapStrokesForHole(strokeIndex: number, totalHandicap: number, t
   return baseStrokes + additionalStroke
 }
 
+function calculateNetScore(strokes: number, handicapStrokes: number): number {
+  return Math.max(0, strokes - handicapStrokes)
+}
+
 export function PlayerScoreEntry({
   currentUser,
   players,
@@ -75,7 +82,7 @@ export function PlayerScoreEntry({
   setCompetitionEntries,
   notifications,
   setNotifications,
-  onDataChange, // Added onDataChange
+  onDataChange, // Added onDataChange callback
 }: PlayerScoreEntryProps) {
   const [selectedGroupId, setSelectedGroupId] = useState<string>("")
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("")
@@ -85,6 +92,13 @@ export function PlayerScoreEntry({
     [key: string]: string
   }>({})
   const [showStartingTeePrompt, setShowStartingTeePrompt] = useState(false)
+  const [savedSession, setSavedSession] = useState<{
+    groupId: string
+    playerId: string
+    groupName: string
+    playerName: string
+    hole: number
+  } | null>(null)
 
   const isNavigatingRef = useRef(false)
   const isSavingRef = useRef(false)
@@ -109,7 +123,20 @@ export function PlayerScoreEntry({
   // Get the course for the selected group
   const course = useMemo(() => {
     if (!selectedGroup) return null
-    return courses.find((c) => c.id === selectedGroup.courseId)
+    const foundCourse = courses.find((c) => c.id === selectedGroup.courseId)
+    console.log("[v0] Course lookup:", {
+      selectedGroupCourseId: selectedGroup.courseId,
+      foundCourse: foundCourse
+        ? {
+            id: foundCourse.id,
+            name: foundCourse.name,
+            hasHoles: !!foundCourse.holes,
+            holesLength: foundCourse.holes?.length || 0,
+            firstHole: foundCourse.holes?.[0],
+          }
+        : null,
+    })
+    return foundCourse
   }, [selectedGroup, courses])
 
   // Get existing round for selected player
@@ -153,12 +180,48 @@ export function PlayerScoreEntry({
       if (scoresKey !== lastSavedScoresRef.current && !isNavigatingRef.current) {
         setHoleScores(scores)
         lastSavedScoresRef.current = scoresKey
+
+        const storageKey = `currentHole_${selectedGroupId}_${selectedPlayerId}`
+        const savedHole = localStorage.getItem(storageKey)
+
+        if (savedHole && Number.parseInt(savedHole) > 0) {
+          // Restore the saved hole
+          const holeNumber = Number.parseInt(savedHole)
+          console.log("[v0] Restoring current hole from localStorage:", holeNumber)
+          setCurrentHole(holeNumber)
+        } else if (course) {
+          // Find first unscored hole if no saved hole
+          const firstUnscoredHole = course.holes.find(
+            (hole) => !scores[hole.holeNumber] || scores[hole.holeNumber] === "0",
+          )
+
+          if (firstUnscoredHole) {
+            console.log("[v0] Navigating to first unscored hole:", firstUnscoredHole.holeNumber)
+            setCurrentHole(firstUnscoredHole.holeNumber)
+          } else if (existingPlayerRound.submitted) {
+            // If round is submitted, stay on hole 1 to view scores
+            setCurrentHole(1)
+          } else {
+            // All holes have scores but not submitted, go to last hole
+            setCurrentHole(course.holes.length)
+          }
+        }
       }
     } else if (!isNavigatingRef.current) {
       setHoleScores({})
+      const storageKey = `currentHole_${selectedGroupId}_${selectedPlayerId}`
+      const savedHole = localStorage.getItem(storageKey)
+
+      if (savedHole && Number.parseInt(savedHole) > 0) {
+        const holeNumber = Number.parseInt(savedHole)
+        console.log("[v0] Restoring current hole from localStorage (no scores):", holeNumber)
+        setCurrentHole(holeNumber)
+      } else {
+        setCurrentHole(1)
+      }
       lastSavedScoresRef.current = ""
     }
-  }, [selectedGroupId, selectedPlayerId, rounds]) // Re-added rounds to dependencies
+  }, [selectedGroupId, selectedPlayerId, rounds, course]) // Added course to dependencies
 
   useEffect(() => {
     if (selectedGroup && selectedPlayerId && !existingRound) {
@@ -205,40 +268,79 @@ export function PlayerScoreEntry({
     isSavingRef.current = true
 
     try {
+      const handicapToUse = existingRound?.handicapUsed || player.handicap
+
       const holes: HoleScore[] = course.holes.map((hole) => {
         const strokes = Number.parseInt(holeScores[hole.holeNumber] || "0") || 0
         const handicapStrokes = getHandicapStrokesForHole(
           hole.strokeIndex || hole.holeNumber,
-          player.handicap,
+          handicapToUse,
           course.holes.length,
         )
         const points = calculateStablefordPoints(strokes, hole.par, handicapStrokes)
+        const netScore = strokes > 0 ? calculateNetScore(strokes, handicapStrokes) : 0
 
-        if (strokes > 0) {
+        if (strokes > 0 && hole.holeNumber === currentHole) {
           const netStrokes = strokes - handicapStrokes
-          const diff = netStrokes - hole.par
 
-          if (diff === -3) {
-            addNotification("eagle", "🦅 Albatross!", `${player.name} scored an albatross on hole ${hole.holeNumber}!`)
-          } else if (diff === -2) {
-            addNotification("eagle", "🦅 Eagle!", `${player.name} scored an eagle on hole ${hole.holeNumber}!`)
-          } else if (diff === -1) {
-            addNotification("birdie", "🐦 Birdie!", `${player.name} scored a birdie on hole ${hole.holeNumber}!`)
+          // Prepare hole data for achievement detection
+          const holesWithPar = course.holes.slice(0, hole.holeNumber).map((h) => ({
+            holeNumber: h.holeNumber,
+            strokes: Number.parseInt(holeScores[h.holeNumber] || "0") || 0,
+            par: h.par,
+          }))
+
+          const currentHoleWithPar = {
+            holeNumber: hole.holeNumber,
+            strokes: strokes, // Use gross strokes, not netStrokes
+            par: hole.par,
           }
 
-          if (strokes === 1 && hole.par >= 3) {
-            addNotification(
-              "hole-in-one",
-              "⛳ HOLE IN ONE!",
-              `${player.name} got a hole in one on hole ${hole.holeNumber}!`,
-            )
-          }
+          const previousHolesWithPar = holesWithPar.slice(0, -1)
+
+          console.log(
+            "[v0] Checking for achievements on hole",
+            hole.holeNumber,
+            "with",
+            strokes,
+            "strokes vs par",
+            hole.par,
+          )
+
+          console.log("[v0] Calling detectAchievements with:", {
+            currentHole: currentHoleWithPar,
+            previousHoles: previousHolesWithPar,
+          })
+
+          // Detect and post achievements
+          detectAchievements([currentHoleWithPar], previousHolesWithPar)
+            .then((achievements) => {
+              console.log("[v0] Achievements detected:", achievements)
+              if (achievements.length > 0) {
+                achievements.forEach((achievement) => {
+                  console.log("[v0] Posting achievement:", achievement)
+                  postAchievement(achievement, player.name, currentUser.tournamentId!)
+                    .then(() => {
+                      console.log("[v0] Achievement posted successfully")
+                    })
+                    .catch((error) => {
+                      console.error("[v0] Error posting achievement:", error)
+                    })
+                })
+              } else {
+                console.log("[v0] No achievements detected for this hole")
+              }
+            })
+            .catch((error) => {
+              console.error("[v0] Error detecting achievements:", error)
+            })
         }
 
         return {
           holeNumber: hole.holeNumber,
           strokes,
           points,
+          netScore,
           penalty: 0,
         }
       })
@@ -257,7 +359,7 @@ export function PlayerScoreEntry({
         totalPoints,
         completed: allHolesEntered,
         submitted: false, // This should always be false when saving progress
-        handicapUsed: player.handicap,
+        handicapUsed: handicapToUse, // Store the handicap used for this round
       }
 
       console.log("[v0] Saving round with data:", {
@@ -304,19 +406,23 @@ export function PlayerScoreEntry({
     const player = players.find((p) => p.id === selectedPlayerId)
     if (!player) return
 
+    const handicapToUse = existingRound?.handicapUsed || player.handicap
+
     const holes: HoleScore[] = course.holes.map((hole) => {
       const strokes = Number.parseInt(holeScores[hole.holeNumber] || "0") || 0
       const handicapStrokes = getHandicapStrokesForHole(
         hole.strokeIndex || hole.holeNumber,
-        player.handicap,
+        handicapToUse, // Use round-specific handicap
         course.holes.length,
       )
       const points = calculateStablefordPoints(strokes, hole.par, handicapStrokes)
+      const netScore = strokes > 0 ? calculateNetScore(strokes, handicapStrokes) : 0
 
       return {
         holeNumber: hole.holeNumber,
         strokes,
         points,
+        netScore, // Include net score in hole data
         penalty: 0,
       }
     })
@@ -347,7 +453,7 @@ export function PlayerScoreEntry({
       totalPoints,
       completed: true,
       submitted: true,
-      handicapUsed: player.handicap,
+      handicapUsed: handicapToUse, // Store the handicap used for this round
     }
 
     try {
@@ -363,6 +469,12 @@ export function PlayerScoreEntry({
         : [...rounds, savedRound]
 
       setRounds(updatedRounds)
+
+      await createNotification(
+        "score",
+        "Round Submitted!",
+        `${player.name} completed their round with ${totalPoints} points (${totalGross} strokes)`,
+      )
 
       alert(`Score submitted and locked!\n\nTotal Strokes: ${totalGross}\nTotal Points: ${totalPoints}`)
     } catch (error) {
@@ -437,6 +549,7 @@ export function PlayerScoreEntry({
         hole: c.holeNumber,
         day: c.day,
         enabled: c.enabled,
+        courseId: c.courseId,
       })),
       filteredCompetitions: filtered.map((c) => ({
         id: c.id,
@@ -444,68 +557,106 @@ export function PlayerScoreEntry({
         hole: c.holeNumber,
         day: c.day,
       })),
+      filterCriteria: {
+        currentHole,
+        groupDay: selectedGroup?.day,
+        hasGroup: !!selectedGroup,
+      },
     })
 
     return filtered
-  }, [competitions, currentHole, selectedGroup?.day])
+  }, [competitions, currentHole, selectedGroup]) // Updated dependency to selectedGroup
 
-  const getCompetitionLeader = (competitionId: string, type: "closest-to-pin" | "longest-drive") => {
+  const getCompetitionLeader = (
+    competitionId: string,
+    type: "closest-to-pin" | "longest-drive" | "straightest-drive",
+  ) => {
     const entries = competitionEntries.filter((e) => e.competitionId === competitionId)
     if (entries.length === 0) return null
 
     const bestEntry = entries.reduce((best, current) => {
-      if (type === "closest-to-pin") {
+      if (type === "closest-to-pin" || type === "straightest-drive") {
         return current.distance < best.distance ? current : best
       } else {
         return current.distance > best.distance ? current : best
       }
     })
 
-    const leaderPlayer = players.find((p) => p.id === bestEntry.playerId)
-    return {
-      player: leaderPlayer?.name || "Unknown",
-      distance: bestEntry.distance,
-    }
+    const player = players.find((p) => p.id === bestEntry.playerId)
+    return { player: player?.name || "Unknown", distance: bestEntry.distance }
   }
 
-  const submitCompetitionEntry = async (competitionId: string, type: "closest-to-pin" | "longest-drive") => {
+  const submitCompetitionEntry = async (
+    competitionId: string,
+    type: "closest-to-pin" | "longest-drive" | "straightest-drive",
+    holeNumber: number,
+  ) => {
     if (!currentUser.tournamentId) return
-
-    const key = `${competitionId}-${selectedPlayerId}`
-    const distance = Number.parseFloat(competitionDistances[key] || "0")
-
-    if (distance <= 0) {
-      alert("Please enter a valid distance")
-      return
-    }
 
     const existingEntry = competitionEntries.find(
       (e) => e.competitionId === competitionId && e.playerId === selectedPlayerId,
     )
 
     try {
+      console.log("[v0] Submitting competition entry:", {
+        competitionId,
+        type,
+        holeNumber,
+        playerId: selectedPlayerId,
+        existingEntry: existingEntry?.id,
+      })
+
       const entryData = {
         competitionId,
         playerId: selectedPlayerId,
         groupId: selectedGroupId,
         tournamentId: currentUser.tournamentId,
-        distance,
+        distance: 0,
         timestamp: new Date().toISOString(),
       }
 
       if (existingEntry) {
-        await updateCompetitionEntry(existingEntry.id!, entryData)
+        await updateCompetitionEntry(existingEntry.id!, 0)
       } else {
         await createCompetitionEntry(entryData)
       }
 
-      const updatedEntries = await getEntriesByCompetition(competitionId)
-      setCompetitionEntries(updatedEntries as CompetitionEntry[])
+      const updatedEntriesForCompetition = await getEntriesByCompetition(competitionId)
+      console.log("[v0] Updated competition entries for this competition:", {
+        competitionId,
+        type,
+        entryCount: updatedEntriesForCompetition.length,
+        entries: updatedEntriesForCompetition.map((e) => ({
+          id: e.id,
+          playerId: e.playerId,
+          competitionId: e.competitionId,
+          distance: e.distance,
+        })),
+      })
 
-      alert(`${type === "closest-to-pin" ? "Closest to Pin" : "Longest Drive"} entry submitted!`)
+      // Merge the updated entries for this competition with entries from other competitions
+      setCompetitionEntries((prevEntries) => {
+        // Remove old entries for this competition
+        const otherEntries = prevEntries.filter((e) => e.competitionId !== competitionId)
+        // Add the updated entries for this competition
+        return [...otherEntries, ...(updatedEntriesForCompetition as CompetitionEntry[])]
+      })
+
+      if (player?.name) {
+        console.log("[v0] Posting competition achievement for:", {
+          type,
+          playerName: player.name,
+          holeNumber,
+        })
+        await checkAndPostCompetitionAchievement(type, player.name, currentUser.tournamentId, holeNumber)
+      }
+
+      alert(
+        `${type === "closest-to-pin" ? "Closest to Pin" : type === "longest-drive" ? "Longest Drive" : "Straightest Drive"} entry submitted!`,
+      )
     } catch (error) {
       console.error("[v0] Error submitting competition entry:", error)
-      alert("Failed to submit entry. Please try again.")
+      alert("Failed to submit competition entry")
     }
   }
 
@@ -518,17 +669,136 @@ export function PlayerScoreEntry({
     setCurrentHole(hole)
   }
 
-  const addNotification = (type: Notification["type"], title: string, message: string) => {
-    const newNotification: Notification = {
-      id: Date.now().toString(),
-      type,
-      title,
-      message,
-      timestamp: new Date().toISOString(),
-      read: false,
-      playerId: selectedPlayerId,
+  const addNotification = async (type: Notification["type"], title: string, message: string) => {
+    if (!currentUser.tournamentId) return
+
+    try {
+      await createNotification({
+        tournamentId: currentUser.tournamentId,
+        playerId: selectedPlayerId,
+        type,
+        title,
+        message,
+        read: false,
+      })
+
+      // Also trigger data refresh if callback provided
+      if (onDataChange) {
+        await onDataChange()
+      }
+    } catch (error) {
+      console.error("[v0] Error creating notification:", error)
     }
-    setNotifications([...(notifications || []), newNotification])
+  }
+
+  useEffect(() => {
+    if (selectedGroupId && selectedPlayerId && currentHole > 0) {
+      const storageKey = `currentHole_${selectedGroupId}_${selectedPlayerId}`
+      localStorage.setItem(storageKey, currentHole.toString())
+      console.log("[v0] Saved current hole to localStorage:", { hole: currentHole, key: storageKey })
+    }
+  }, [currentHole, selectedGroupId, selectedPlayerId])
+
+  useEffect(() => {
+    const savedSessionKey = `scoringSession_${currentUser.tournamentId}_${currentUser.id}`
+    const savedData = localStorage.getItem(savedSessionKey)
+
+    if (savedData) {
+      try {
+        const session = JSON.parse(savedData)
+        // Verify the group and player still exist
+        const groupExists = groups.find((g) => g.id === session.groupId)
+        const playerExists = players.find((p) => p.id === session.playerId)
+
+        if (groupExists && playerExists && !selectedGroupId && !selectedPlayerId) {
+          setSavedSession(session)
+        } else if (!groupExists || !playerExists) {
+          // Clean up invalid session
+          localStorage.removeItem(savedSessionKey)
+        }
+      } catch (e) {
+        console.error("[v0] Error loading saved session:", e)
+        localStorage.removeItem(savedSessionKey)
+      }
+    }
+  }, [currentUser.tournamentId, currentUser.id, groups, players, selectedGroupId, selectedPlayerId])
+
+  useEffect(() => {
+    if (selectedGroupId && selectedPlayerId) {
+      const group = groups.find((g) => g.id === selectedGroupId)
+      const player = players.find((p) => p.id === selectedPlayerId)
+
+      if (group && player) {
+        const courseName = courses.find((c) => c.id === group.courseId)?.name || "Unknown"
+        const session = {
+          groupId: selectedGroupId,
+          playerId: selectedPlayerId,
+          groupName: `${group.name} - ${courseName} - Day ${group.day}`,
+          playerName: player.name,
+          hole: currentHole,
+        }
+
+        const savedSessionKey = `scoringSession_${currentUser.tournamentId}_${currentUser.id}`
+        localStorage.setItem(savedSessionKey, JSON.stringify(session))
+      }
+    }
+  }, [
+    selectedGroupId,
+    selectedPlayerId,
+    currentHole,
+    groups,
+    players,
+    courses,
+    currentUser.tournamentId,
+    currentUser.id,
+  ])
+
+  useEffect(() => {
+    if (selectedGroupId && selectedPlayerId && currentHole > 0) {
+      const savedSessionKey = `scoringSession_${currentUser.tournamentId}_${currentUser.id}`
+      const savedData = localStorage.getItem(savedSessionKey)
+
+      if (savedData) {
+        try {
+          const session = JSON.parse(savedData)
+          session.hole = currentHole
+          localStorage.setItem(savedSessionKey, JSON.stringify(session))
+        } catch (e) {
+          console.error("[v0] Error updating session hole:", e)
+        }
+      }
+    }
+  }, [currentHole, selectedGroupId, selectedPlayerId, currentUser.tournamentId, currentUser.id])
+
+  useEffect(() => {
+    console.log("[v0] PlayerScoreEntry state:", {
+      hasGroup: !!selectedGroup,
+      groupId: selectedGroupId,
+      hasPlayerId: !!selectedPlayerId,
+      playerId: selectedPlayerId,
+      hasCourse: !!course,
+      courseId: course?.id,
+      courseHolesCount: course?.holes?.length || 0,
+      currentHole,
+      hasPlayer: !!player,
+      hasCurrentHoleData: !!currentHoleData,
+      currentHoleDataDetails: currentHoleData
+        ? {
+            holeNumber: currentHoleData.holeNumber,
+            par: currentHoleData.par,
+            strokeIndex: currentHoleData.strokeIndex,
+          }
+        : null,
+      canShowScorecard: !!selectedGroup && !!course && !!selectedPlayerId && !!player && !!currentHoleData,
+    })
+  }, [selectedGroup, selectedGroupId, course, selectedPlayerId, player, currentHoleData, currentHole])
+
+  const handleResumeGame = () => {
+    if (savedSession) {
+      setSelectedGroupId(savedSession.groupId)
+      setSelectedPlayerId(savedSession.playerId)
+      setSavedSession(null) // Clear after resuming
+    }
   }
 
   if (showStartingTeePrompt) {
@@ -553,7 +823,32 @@ export function PlayerScoreEntry({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-4">
+      {savedSession && !selectedPlayerId && (
+        <div className="mb-4 p-4 bg-primary/10 border border-primary/20 rounded-lg">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <PlayCircle className="w-5 h-5 text-primary" />
+                <h3 className="font-semibold">Resume Your Game</h3>
+              </div>
+              <div className="space-y-1 text-sm text-muted-foreground">
+                <div>
+                  <span className="font-medium text-foreground">{savedSession.playerName}</span>
+                </div>
+                <div>{savedSession.groupName}</div>
+                <div>Currently on hole {savedSession.hole}</div>
+              </div>
+            </div>
+            <Button onClick={handleResumeGame} className="flex items-center gap-2">
+              <PlayCircle className="w-4 h-4" />
+              Resume
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Group and Player Selection */}
       <Card>
         <CardHeader>
           <CardTitle>My Groups</CardTitle>
@@ -626,6 +921,7 @@ export function PlayerScoreEntry({
         </CardContent>
       </Card>
 
+      {/* Scorecard */}
       {selectedGroup && course && selectedPlayerId && player && currentHoleData && (
         <Card className="fixed inset-0 md:relative md:inset-auto flex flex-col h-screen md:h-auto z-50 overflow-hidden">
           <CardHeader className="flex-shrink-0 border-b">
@@ -674,49 +970,40 @@ export function PlayerScoreEntry({
                       <div className="flex items-center gap-2">
                         {comp.type === "closest-to-pin" ? (
                           <Target className="w-5 h-5 text-blue-600" />
-                        ) : (
+                        ) : comp.type === "longest-drive" ? (
                           <TrendingUp className="w-5 h-5 text-emerald-600" />
+                        ) : (
+                          <Navigation className="w-5 h-5 text-purple-600" />
                         )}
                         <h3 className="font-semibold">
-                          {comp.type === "closest-to-pin" ? "Closest to Pin" : "Longest Drive"}
+                          {comp.type === "closest-to-pin"
+                            ? "Closest to Pin"
+                            : comp.type === "longest-drive"
+                              ? "Longest Drive"
+                              : "Straightest Drive"}
                         </h3>
                       </div>
 
                       {leader && (
                         <div className="p-2 rounded bg-blue-100">
-                          <p className="text-sm font-medium text-blue-900">
-                            Current Leader: {leader.player} - {leader.distance}m
-                          </p>
+                          <p className="text-sm font-medium text-blue-900">Current Winner: {leader.player}</p>
                         </div>
                       )}
 
                       {myEntry && (
-                        <div className="p-2 rounded bg-blue-200">
-                          <p className="text-sm font-medium text-blue-900">Your Entry: {myEntry.distance}m</p>
+                        <div className="p-2 rounded bg-green-100">
+                          <p className="text-sm font-medium text-green-900">You've claimed this!</p>
                         </div>
                       )}
 
                       <div className="flex gap-2">
-                        <Input
-                          type="number"
-                          placeholder="Distance (m)"
-                          value={competitionDistances[key] || ""}
-                          onChange={(e) =>
-                            setCompetitionDistances({
-                              ...competitionDistances,
-                              [key]: e.target.value,
-                            })
-                          }
-                          className="flex-1"
-                          disabled={isLocked}
-                        />
                         <Button
-                          onClick={() => submitCompetitionEntry(comp.id, comp.type)}
+                          onClick={() => submitCompetitionEntry(comp.id, comp.type, currentHole)}
                           disabled={isLocked}
                           variant="default"
-                          className="bg-blue-600 hover:bg-blue-700"
+                          className="bg-blue-600 hover:bg-blue-700 w-full"
                         >
-                          {myEntry ? "Update" : "Submit"}
+                          {myEntry ? "Update Claim" : "I Won This!"}
                         </Button>
                       </div>
                     </div>
@@ -809,13 +1096,15 @@ export function PlayerScoreEntry({
 
               {(() => {
                 const strokes = Number.parseInt(holeScores[currentHole] || "0") || 0
+                const handicapToUse = existingRound?.handicapUsed || player.handicap
                 const handicapStrokes = getHandicapStrokesForHole(
                   currentHoleData.strokeIndex || currentHoleData.holeNumber,
-                  player.handicap,
+                  handicapToUse, // Use round-specific handicap
                   course.holes.length,
                 )
                 const points =
                   strokes > 0 ? calculateStablefordPoints(strokes, currentHoleData.par, handicapStrokes) : 0
+                const netScore = strokes > 0 ? calculateNetScore(strokes, handicapStrokes) : 0
 
                 return (
                   <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg">
@@ -824,7 +1113,11 @@ export function PlayerScoreEntry({
                         +{handicapStrokes} stroke{handicapStrokes > 1 ? "s" : ""}
                       </span>
                     )}
-                    {strokes > 0 && <span className="text-xl font-bold text-emerald-600">{points} points</span>}
+                    {strokes > 0 && (
+                      <span className="text-xl font-bold text-emerald-600">
+                        {points} points / {netScore} net
+                      </span>
+                    )}
                   </div>
                 )
               })()}
@@ -880,9 +1173,10 @@ export function PlayerScoreEntry({
                   {course.holes.reduce((sum, hole) => {
                     const strokes = Number.parseInt(holeScores[hole.holeNumber] || "0") || 0
                     if (strokes === 0) return sum
+                    const handicapToUse = existingRound?.handicapUsed || player.handicap
                     const handicapStrokes = getHandicapStrokesForHole(
                       hole.strokeIndex || hole.holeNumber,
-                      player.handicap,
+                      handicapToUse, // Use round-specific handicap
                       course.holes.length,
                     )
                     return sum + calculateStablefordPoints(strokes, hole.par, handicapStrokes)

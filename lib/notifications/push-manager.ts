@@ -2,8 +2,6 @@
 export class PushNotificationManager {
   private static instance: PushNotificationManager
   private registration: ServiceWorkerRegistration | null = null
-  private initializationAttempted = false
-  private initializationSuccessful = false
 
   private constructor() {}
 
@@ -15,25 +13,18 @@ export class PushNotificationManager {
   }
 
   async initialize(): Promise<boolean> {
-    if (this.initializationAttempted) {
-      return this.initializationSuccessful
-    }
-
-    this.initializationAttempted = true
-
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
       console.log("[v0] Push notifications not supported")
       return false
     }
 
     try {
+      // Register service worker
       this.registration = await navigator.serviceWorker.register("/service-worker.js")
       console.log("[v0] Service Worker registered:", this.registration)
-      this.initializationSuccessful = true
       return true
     } catch (error) {
-      console.log("[v0] Service Worker registration failed (this is normal in preview environments):", error)
-      this.initializationSuccessful = false
+      console.error("[v0] Service Worker registration failed:", error)
       return false
     }
   }
@@ -50,12 +41,8 @@ export class PushNotificationManager {
   }
 
   async subscribe(): Promise<PushSubscription | null> {
-    if (!this.initializationSuccessful) {
-      const initialized = await this.initialize()
-      if (!initialized) {
-        console.log("[v0] Cannot subscribe: Service Worker not available")
-        return null
-      }
+    if (!this.registration) {
+      await this.initialize()
     }
 
     if (!this.registration) {
@@ -63,8 +50,13 @@ export class PushNotificationManager {
     }
 
     try {
-      const response = await fetch("/api/push/vapid-key")
+      const response = await fetch("/api/vapid-key")
       const { publicKey } = await response.json()
+
+      if (!publicKey) {
+        console.error("[v0] VAPID public key not available")
+        return null
+      }
 
       const subscription = await this.registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -99,23 +91,18 @@ export class PushNotificationManager {
   }
 
   async getSubscription(): Promise<PushSubscription | null> {
-    if (!this.initializationSuccessful) {
-      const initialized = await this.initialize()
-      if (!initialized) {
-        return null
-      }
-    }
-
-    if (!this.registration) {
-      return null
-    }
-
     try {
-      return await this.registration.pushManager.getSubscription()
+      if ("serviceWorker" in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration()
+        if (registration) {
+          this.registration = registration
+          return await registration.pushManager.getSubscription()
+        }
+      }
     } catch (error) {
-      console.log("[v0] Failed to get subscription:", error)
-      return null
+      console.log("[v0] Could not get subscription:", error)
     }
+    return null
   }
 
   // Helper to convert VAPID key

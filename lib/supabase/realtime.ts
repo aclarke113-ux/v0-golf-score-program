@@ -1,8 +1,8 @@
-import { createClient } from "@/lib/supabase/client"
+import { createClientSync } from "@/lib/supabase/client"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 
 export function subscribeToMessages(tournamentId: string, callback: () => void): RealtimeChannel {
-  const supabase = createClient()
+  const supabase = createClientSync()
 
   const channel = supabase
     .channel(`messages:${tournamentId}`)
@@ -22,7 +22,7 @@ export function subscribeToMessages(tournamentId: string, callback: () => void):
 }
 
 export function subscribeToPosts(tournamentId: string, callback: () => void): RealtimeChannel {
-  const supabase = createClient()
+  const supabase = createClientSync()
 
   const channel = supabase
     .channel(`posts:${tournamentId}`)
@@ -42,7 +42,7 @@ export function subscribeToPosts(tournamentId: string, callback: () => void): Re
 }
 
 export function subscribeToPlayers(tournamentId: string, callback: () => void): RealtimeChannel {
-  const supabase = createClient()
+  const supabase = createClientSync()
 
   const channel = supabase
     .channel(`players:${tournamentId}`)
@@ -62,7 +62,7 @@ export function subscribeToPlayers(tournamentId: string, callback: () => void): 
 }
 
 export function subscribeToGroups(tournamentId: string, callback: () => void): RealtimeChannel {
-  const supabase = createClient()
+  const supabase = createClientSync()
 
   const channel = supabase
     .channel(`groups:${tournamentId}`)
@@ -82,7 +82,7 @@ export function subscribeToGroups(tournamentId: string, callback: () => void): R
 }
 
 export function subscribeToRounds(tournamentId: string, callback: () => void): RealtimeChannel {
-  const supabase = createClient()
+  const supabase = createClientSync()
 
   // Note: Rounds don't have tournament_id directly, so we subscribe to all changes
   // In production, you might want to filter by player_id or group_id
@@ -103,7 +103,7 @@ export function subscribeToRounds(tournamentId: string, callback: () => void): R
 }
 
 export function subscribeToAuctions(tournamentId: string, callback: () => void): RealtimeChannel {
-  const supabase = createClient()
+  const supabase = createClientSync()
 
   const channel = supabase
     .channel(`auctions:${tournamentId}`)
@@ -123,7 +123,7 @@ export function subscribeToAuctions(tournamentId: string, callback: () => void):
 }
 
 export function subscribeToPredictions(tournamentId: string, callback: () => void): RealtimeChannel {
-  const supabase = createClient()
+  const supabase = createClientSync()
 
   const channel = supabase
     .channel(`predictions:${tournamentId}`)
@@ -143,7 +143,7 @@ export function subscribeToPredictions(tournamentId: string, callback: () => voi
 }
 
 export function subscribeToNotifications(playerId: string, callback: () => void): RealtimeChannel {
-  const supabase = createClient()
+  const supabase = createClientSync()
 
   const channel = supabase
     .channel(`notifications:${playerId}`)
@@ -164,6 +164,6 @@ export function subscribeToNotifications(playerId: string, callback: () => void)
 
 // Utility to unsubscribe from a channel
 export function unsubscribe(channel: RealtimeChannel) {
-  const supabase = createClient()
+  const supabase = createClientSync()
   supabase.removeChannel(channel)
 }

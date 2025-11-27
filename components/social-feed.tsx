@@ -37,7 +37,19 @@ export function SocialFeed({ currentUserId, currentUserName, tournamentId }: Soc
 
   const loadPosts = async () => {
     try {
+      console.log("[v0] Loading posts for tournament:", tournamentId)
       const data = await getPostsByTournament(tournamentId)
+      console.log("[v0] Posts loaded:", data.length, "posts found")
+      console.log(
+        "[v0] First 3 posts:",
+        data.slice(0, 3).map((p) => ({
+          id: p.id,
+          userName: p.userName,
+          caption: p.caption?.substring(0, 50),
+          timestamp: p.timestamp,
+        })),
+      )
+
       const postsWithComments = await Promise.all(
         data.map(async (post) => {
           const comments = await getCommentsByPost(post.id)
@@ -114,7 +126,7 @@ export function SocialFeed({ currentUserId, currentUserName, tournamentId }: Soc
         <h2 className="text-2xl font-bold">Trip Highlights</h2>
         <Button onClick={() => setShowUpload(true)} disabled={loading}>
           <Upload className="w-4 h-4 mr-2" />
-          Share
+          Post
         </Button>
       </div>
 
@@ -131,26 +143,37 @@ export function SocialFeed({ currentUserId, currentUserName, tournamentId }: Soc
       )}
 
       <div className="flex-1 overflow-y-auto">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-4">
           {posts.map((post) => (
             <Card key={post.id} className="overflow-hidden">
+              <div className="p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1">
+                    <p className="font-semibold">{post.userName}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(post.timestamp).toLocaleString()}</p>
+                  </div>
+                </div>
+
+                {post.caption && <p className="text-base leading-relaxed whitespace-pre-wrap">{post.caption}</p>}
+              </div>
+
               {post.mediaUrl && (
-                <div className="relative aspect-square bg-muted">
+                <div className="relative w-full bg-muted">
                   {post.mediaType === "video" ? (
-                    <video src={post.mediaUrl} controls className="w-full h-full object-cover">
+                    <video src={post.mediaUrl} controls className="w-full object-contain max-h-[500px]">
                       Your browser does not support the video tag.
                     </video>
                   ) : (
                     <img
-                      src={post.mediaUrl || "/placeholder.svg"}
+                      src={post.mediaUrl || "/placeholder.svg?height=400&width=600"}
                       alt={post.caption || "Golf moment"}
-                      className="w-full h-full object-cover"
+                      className="w-full object-contain max-h-[500px]"
                     />
                   )}
                 </div>
               )}
 
-              <div className="p-4 space-y-3">
+              <div className="p-4 border-t space-y-3">
                 <div className="flex items-center gap-4">
                   <Button
                     variant="ghost"
@@ -166,13 +189,6 @@ export function SocialFeed({ currentUserId, currentUserName, tournamentId }: Soc
                     {post.comments.length}
                   </Button>
                 </div>
-
-                <p className="text-sm">
-                  <span className="font-semibold">{post.userName || "Unknown Player"}</span>
-                  {post.caption && <> {post.caption}</>}
-                </p>
-
-                <p className="text-xs text-muted-foreground">{new Date(post.timestamp).toLocaleDateString()}</p>
               </div>
             </Card>
           ))}
@@ -228,7 +244,7 @@ function UploadModal({
   }
 
   const handleSubmit = () => {
-    if (!mediaUrl.trim()) return
+    if (!caption.trim() && !mediaUrl.trim()) return
     onUpload(caption, mediaUrl, mediaType)
   }
 
@@ -236,37 +252,48 @@ function UploadModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <Card className="w-full max-w-lg p-6 space-y-4">
         <div className="flex justify-between items-center">
-          <h3 className="text-xl font-bold">Share a Moment</h3>
+          <h3 className="text-xl font-bold">Create Post</h3>
           <Button variant="ghost" size="sm" onClick={onClose}>
             <X className="w-4 h-4" />
           </Button>
         </div>
 
+        <Textarea
+          placeholder="What's on your mind?"
+          value={caption}
+          onChange={(e) => setCaption(e.target.value)}
+          rows={4}
+          className="text-base"
+        />
+
         {!mediaUrl && !uploadMethod && (
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              variant="outline"
-              className="h-24 flex flex-col gap-2 bg-transparent"
-              onClick={() => {
-                setUploadMethod("camera")
-                cameraInputRef.current?.click()
-              }}
-            >
-              <Camera className="w-8 h-8" />
-              <span>Take Photo/Video</span>
-            </Button>
-            <Button
-              variant="outline"
-              className="h-24 flex flex-col gap-2 bg-transparent"
-              onClick={() => {
-                setUploadMethod("file")
-                fileInputRef.current?.click()
-              }}
-            >
-              <ImageIcon className="w-8 h-8" />
-              <span>Choose from Library</span>
-            </Button>
-          </div>
+          <>
+            <div className="text-sm text-muted-foreground">Add to your post (optional)</div>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant="outline"
+                className="h-16 flex gap-2 bg-transparent"
+                onClick={() => {
+                  setUploadMethod("camera")
+                  cameraInputRef.current?.click()
+                }}
+              >
+                <Camera className="w-5 h-5" />
+                <span>Photo/Video</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-16 flex gap-2 bg-transparent"
+                onClick={() => {
+                  setUploadMethod("file")
+                  fileInputRef.current?.click()
+                }}
+              >
+                <ImageIcon className="w-5 h-5" />
+                <span>Gallery</span>
+              </Button>
+            </div>
+          </>
         )}
 
         <input
@@ -299,43 +326,38 @@ function UploadModal({
         )}
 
         {mediaUrl && !uploading && (
-          <>
-            <div className="relative aspect-square bg-muted rounded-lg overflow-hidden">
-              {mediaType === "video" ? (
-                <video src={mediaUrl} controls className="w-full h-full object-cover">
-                  Your browser does not support the video tag.
-                </video>
-              ) : (
-                <img src={mediaUrl || "/placeholder.svg"} alt="Preview" className="w-full h-full object-cover" />
-              )}
-              <Button
-                variant="destructive"
-                size="sm"
-                className="absolute top-2 right-2"
-                onClick={() => {
-                  setMediaUrl("")
-                  setUploadMethod(null)
-                }}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <Textarea
-              placeholder="Add a caption..."
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              rows={3}
-            />
-          </>
+          <div className="relative rounded-lg overflow-hidden bg-muted">
+            {mediaType === "video" ? (
+              <video src={mediaUrl} controls className="w-full object-contain max-h-[300px]">
+                Your browser does not support the video tag.
+              </video>
+            ) : (
+              <img src={mediaUrl || "/placeholder.svg"} alt="Preview" className="w-full object-contain max-h-[300px]" />
+            )}
+            <Button
+              variant="destructive"
+              size="sm"
+              className="absolute top-2 right-2"
+              onClick={() => {
+                setMediaUrl("")
+                setUploadMethod(null)
+              }}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
         )}
 
         <div className="flex gap-2">
           <Button onClick={onClose} variant="outline" className="flex-1 bg-transparent">
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={!mediaUrl.trim() || uploading} className="flex-1">
-            Share
+          <Button
+            onClick={handleSubmit}
+            disabled={(!caption.trim() && !mediaUrl.trim()) || uploading}
+            className="flex-1"
+          >
+            Post
           </Button>
         </div>
       </Card>

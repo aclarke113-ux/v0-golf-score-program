@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Target, TrendingUp, Trophy, Calendar } from "lucide-react"
+import { Target, TrendingUp, Trophy, Calendar, Navigation } from "lucide-react"
 import type { Competition, CompetitionEntry, Player, Course, Tournament } from "@/app/page"
 import {
   getCompetitionsByTournament,
@@ -67,7 +67,11 @@ export function CompetitionManagement({
   const numberOfDays = currentTournament?.numberOfDays || 2
   const hasPlayAroundDay = currentTournament?.hasPlayAroundDay || false
 
-  const toggleCompetition = async (holeNumber: number, type: "closest-to-pin" | "longest-drive", day: number) => {
+  const toggleCompetition = async (
+    holeNumber: number,
+    type: "closest-to-pin" | "longest-drive" | "straightest-drive",
+    day: number,
+  ) => {
     if (!selectedCourse) {
       alert("Please select a course first")
       return
@@ -85,10 +89,18 @@ export function CompetitionManagement({
         // Competition exists, delete it (toggle off)
         await deleteCompetition(existing.id!)
       } else {
+        console.log("[v0] About to create competition with params:", {
+          type,
+          holeNumber,
+          day,
+          courseId: selectedCourse,
+          tournamentId: currentTournament.id,
+        })
+
         // Competition doesn't exist, create it (toggle on)
         await createCompetition({
           type,
-          holeNumber,
+          holeNumber, // Ensure holeNumber is explicitly passed
           day,
           courseId: selectedCourse,
           tournamentId: currentTournament.id,
@@ -107,13 +119,21 @@ export function CompetitionManagement({
     }
   }
 
-  const isCompetitionEnabled = (holeNumber: number, type: "closest-to-pin" | "longest-drive", day: number) => {
+  const isCompetitionEnabled = (
+    holeNumber: number,
+    type: "closest-to-pin" | "longest-drive" | "straightest-drive",
+    day: number,
+  ) => {
     return localCompetitions.some(
       (c) => c.holeNumber === holeNumber && c.type === type && c.day === day && c.courseId === selectedCourse,
     )
   }
 
-  const getCompetitionLeader = (holeNumber: number, type: "closest-to-pin" | "longest-drive", day: number) => {
+  const getCompetitionLeader = (
+    holeNumber: number,
+    type: "closest-to-pin" | "longest-drive" | "straightest-drive",
+    day: number,
+  ) => {
     const comp = localCompetitions.find((c) => c.holeNumber === holeNumber && c.type === type && c.day === day)
     if (!comp) return null
 
@@ -121,7 +141,7 @@ export function CompetitionManagement({
     if (entries.length === 0) return null
 
     const bestEntry = entries.reduce((best, current) => {
-      if (type === "closest-to-pin") {
+      if (type === "closest-to-pin" || type === "straightest-drive") {
         return current.distance < best.distance ? current : best
       } else {
         return current.distance > best.distance ? current : best
@@ -190,6 +210,7 @@ export function CompetitionManagement({
                 {course.holes.map((hole) => {
                   const ctpLeader = getCompetitionLeader(hole.holeNumber, "closest-to-pin", selectedDay)
                   const ldLeader = getCompetitionLeader(hole.holeNumber, "longest-drive", selectedDay)
+                  const sdLeader = getCompetitionLeader(hole.holeNumber, "straightest-drive", selectedDay)
 
                   return (
                     <Card key={hole.holeNumber}>
@@ -233,6 +254,25 @@ export function CompetitionManagement({
                           <Switch
                             checked={isCompetitionEnabled(hole.holeNumber, "longest-drive", selectedDay)}
                             onCheckedChange={() => toggleCompetition(hole.holeNumber, "longest-drive", selectedDay)}
+                            disabled={loading}
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Navigation className="w-5 h-5 text-purple-600" />
+                            <div>
+                              <p className="font-medium text-purple-900">Straightest Drive</p>
+                              {sdLeader && (
+                                <p className="text-sm text-purple-700">
+                                  Leader: {sdLeader.player} - {sdLeader.distance}m from center
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <Switch
+                            checked={isCompetitionEnabled(hole.holeNumber, "straightest-drive", selectedDay)}
+                            onCheckedChange={() => toggleCompetition(hole.holeNumber, "straightest-drive", selectedDay)}
                             disabled={loading}
                           />
                         </div>

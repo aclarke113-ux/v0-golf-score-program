@@ -3,14 +3,14 @@ import type { Metadata, Viewport } from "next"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "Aussie Golf",
+  title: "Aussie Slice",
   description: "Modern golf tournament scoring and management",
   generator: "v0.app",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Aussie Golf",
+    title: "Aussie Slice",
   },
   icons: {
     apple: "/icon-192.jpg",

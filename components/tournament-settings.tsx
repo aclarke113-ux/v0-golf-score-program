@@ -7,9 +7,23 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Key, Eye, EyeOff, Settings, Calendar, Trophy, Target, Copy, Check, QrCode } from "lucide-react"
-import type { Player, Tournament } from "@/app/page"
+import {
+  Key,
+  Eye,
+  EyeOff,
+  Settings,
+  Calendar,
+  Trophy,
+  Target,
+  Copy,
+  Check,
+  QrCode,
+  Sparkles,
+  DollarSign,
+} from "lucide-react"
+import type { Player, Tournament, Round } from "@/app/page"
 import { updateTournament, updatePlayer, getTournamentById } from "@/lib/supabase/db"
+import { GenerateAchievementsButton } from "@/components/admin/generate-achievements-button"
 
 type TournamentSettingsProps = {
   currentTournament: Tournament | null
@@ -17,6 +31,8 @@ type TournamentSettingsProps = {
   setPlayers: (players: Player[]) => void
   tournaments: Tournament[]
   setTournaments: (tournaments: Tournament[]) => void
+  rounds: Round[]
+  setRounds: (rounds: Round[]) => void
 }
 
 export function TournamentSettings({
@@ -25,6 +41,8 @@ export function TournamentSettings({
   setPlayers,
   tournaments,
   setTournaments,
+  rounds,
+  setRounds,
 }: TournamentSettingsProps) {
   const [localTournament, setLocalTournament] = useState<Tournament | null>(currentTournament)
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("")
@@ -228,7 +246,7 @@ export function TournamentSettings({
               </Label>
               <Select
                 value={localTournament.scoringType || "handicap"}
-                onValueChange={(value: "strokes" | "handicap" | "net") =>
+                onValueChange={(value: "strokes" | "handicap" | "net-score") =>
                   handleUpdateTournamentSettings({ scoringType: value })
                 }
                 disabled={loading}
@@ -237,11 +255,18 @@ export function TournamentSettings({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="handicap">Handicap (Stableford Points)</SelectItem>
+                  <SelectItem value="handicap">Stableford Points</SelectItem>
+                  <SelectItem value="net-score">Net Score</SelectItem>
                   <SelectItem value="strokes">Stroke Play (Gross Strokes)</SelectItem>
-                  <SelectItem value="net">Net Score (Strokes with Handicap)</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-2">
+                {localTournament.scoringType === "handicap" &&
+                  "Points based on score vs par with handicap (higher is better)"}
+                {localTournament.scoringType === "net-score" && "Gross score minus handicap strokes (lower is better)"}
+                {localTournament.scoringType === "strokes" &&
+                  "Total strokes without handicap adjustment (lower is better)"}
+              </p>
             </div>
           </div>
         </CardContent>
@@ -276,6 +301,21 @@ export function TournamentSettings({
             <Switch
               checked={localTournament.hasPick3 ?? true}
               onCheckedChange={(checked) => handleUpdateTournamentSettings({ hasPick3: checked })}
+              disabled={loading}
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-3 border rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border-green-500/50">
+            <div>
+              <p className="font-medium flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-green-600" />
+                Infinite Betting Credits
+              </p>
+              <p className="text-sm text-muted-foreground">Give all players unlimited credits for betting</p>
+            </div>
+            <Switch
+              checked={localTournament.infiniteBetting ?? false}
+              onCheckedChange={(checked) => handleUpdateTournamentSettings({ infiniteBetting: checked })}
               disabled={loading}
             />
           </div>
@@ -390,6 +430,27 @@ export function TournamentSettings({
             >
               {loading ? "Setting..." : "Set Password"}
             </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-2 border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-transparent">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-emerald-500" />
+            Achievement Posts
+          </CardTitle>
+          <CardDescription>Generate achievement posts from existing rounds for the social feed</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              This will analyze all completed rounds and create posts for special achievements like hole-in-ones,
+              eagles, birdies, and scoring streaks. All players will be notified of these achievements.
+            </p>
+            {localTournament && (
+              <GenerateAchievementsButton tournament={localTournament} rounds={rounds} players={players} courses={[]} />
+            )}
           </div>
         </CardContent>
       </Card>

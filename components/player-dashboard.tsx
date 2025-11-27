@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { LogOut, Trophy, PenLine, BarChart3, MessageCircle, ImageIcon, Settings, Target, Shield } from "lucide-react"
+import { LogOut, PenLine, BarChart3, MessageCircle, ImageIcon, Settings, Target, Shield } from "lucide-react"
 import { PlayerScoreEntry } from "@/components/player-score-entry"
 import { PlayerLeaderboard } from "@/components/player-leaderboard"
 import { CompetitionLeaderboard } from "@/components/competition-leaderboard"
@@ -13,7 +13,9 @@ import { CompetitionChat } from "@/components/competition-chat"
 import { SocialFeed } from "@/components/social-feed"
 import { PlayerSettings } from "@/components/player-settings"
 import { NotificationBanner, type BannerNotification } from "@/components/notification-banner"
+import { NotificationSetupBanner } from "@/components/notification-setup-banner"
 import { AdminDashboard } from "@/components/admin-dashboard"
+import Image from "next/image"
 import type {
   Player,
   Course,
@@ -168,16 +170,17 @@ export function PlayerDashboard({
   }
 
   return (
-    <div className="h-dvh flex flex-col bg-gradient-to-br from-[#1a3a0f] via-[#2D5016] to-[#8B7355] overflow-hidden">
+    <div className="h-dvh flex flex-col bg-gradient-to-br from-[#1a3a2e] via-[#2d4a3e] to-[#3a5a4e] overflow-hidden">
+      <NotificationSetupBanner />
       <NotificationBanner notifications={bannerNotifications} onDismiss={handleDismissNotification} />
 
       <div className="flex-none px-4 pt-4 pb-2">
-        <div className="flex items-center justify-between bg-[#2D5016] text-[#F5F1E8] p-3 rounded-lg shadow-lg border-2 border-[#FFD700]/20">
-          <div className="flex items-center gap-2">
-            <Trophy className="w-6 h-6 text-[#FFD700]" />
+        <div className="flex items-center justify-between bg-[#1a3a2e] text-[#d4af37] p-3 rounded-lg shadow-lg border-2 border-[#d4af37]/30">
+          <div className="flex items-center gap-3">
+            <Image src="/aussie-slice-logo.png" alt="Aussie Slice" width={40} height={40} />
             <div>
-              <h1 className="text-lg font-bold">Aussie Golf</h1>
-              <p className="text-xs text-[#F5F1E8]/80">
+              <h1 className="text-lg font-bold text-[#d4af37]">Aussie Slice</h1>
+              <p className="text-xs text-[#d4af37]/80">
                 {currentTournament?.name || "Tournament"} - {currentUser.name}
               </p>
             </div>
@@ -188,7 +191,7 @@ export function PlayerDashboard({
                 onClick={() => setIsAdminMode(true)}
                 variant="secondary"
                 size="default"
-                className="bg-[#FFD700] text-[#1a3a0f] hover:bg-[#FFD700]/90 font-bold shadow-lg"
+                className="bg-[#d4af37] text-[#1a3a2e] hover:bg-[#d4af37]/90 font-bold shadow-lg"
               >
                 <Shield className="w-5 h-5 mr-2" />
                 ADMIN
@@ -198,7 +201,7 @@ export function PlayerDashboard({
               onClick={onLogout}
               variant="secondary"
               size="sm"
-              className="bg-[#F5F1E8] text-[#2D5016] hover:bg-[#F5F1E8]/90"
+              className="bg-[#d4af37]/20 text-[#d4af37] hover:bg-[#d4af37]/30 border border-[#d4af37]/50"
             >
               <LogOut className="w-4 h-4" />
             </Button>
@@ -222,6 +225,7 @@ export function PlayerDashboard({
                 setCompetitionEntries={setCompetitionEntries}
                 notifications={notifications}
                 setNotifications={setNotifications}
+                onDataChange={onDataChange}
               />
             </TabsContent>
 
@@ -257,6 +261,7 @@ export function PlayerDashboard({
                 competitionEntries={competitionEntries}
                 players={players}
                 courses={courses}
+                tournament={currentTournament}
               />
             </TabsContent>
 

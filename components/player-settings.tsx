@@ -9,9 +9,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Camera, Trophy, Calendar, Gavel, Target, Upload, Loader2 } from "lucide-react"
+import { PushNotificationSetup } from "@/components/notifications/push-notification-setup"
 import type { User, Player, Tournament } from "@/lib/types"
 import { uploadProfilePicture } from "@/app/actions/upload-profile-picture"
-import { PushNotificationSetup } from "@/components/notifications/push-notification-setup"
 
 type PlayerSettingsProps = {
   currentUser: User
@@ -103,6 +103,10 @@ export function PlayerSettings({
 
   return (
     <div className="space-y-4 pb-20">
+      {currentUser && currentTournament && (
+        <PushNotificationSetup userId={currentUser.id} tournamentId={currentTournament.id} />
+      )}
+
       {(currentTournament?.calcuttaEnabled !== false || currentTournament?.pick3Enabled !== false) && (
         <Card>
           <CardHeader>
@@ -263,8 +267,6 @@ export function PlayerSettings({
           </Button>
         </CardContent>
       </Card>
-
-      <PushNotificationSetup />
 
       <Card>
         <CardHeader>

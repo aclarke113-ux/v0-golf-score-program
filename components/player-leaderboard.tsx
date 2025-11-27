@@ -8,12 +8,20 @@ import { PlayerProfileModal } from "@/components/player-profile-modal" // Fixed 
 import { subscribeToRounds, unsubscribe } from "@/lib/supabase/realtime"
 import type { Player, Course, Group, Round, Tournament } from "@/types" // Declare the variables before using them
 
+function getHandicapStrokesForHole(strokeIndex: number, handicap: number, totalHoles = 18): number {
+  if (strokeIndex === 0 || !strokeIndex) return 0
+  const fullStrokes = Math.floor(handicap / totalHoles)
+  const remainingStrokes = handicap % totalHoles
+  return fullStrokes + (strokeIndex <= remainingStrokes ? 1 : 0)
+}
+
 type PlayerLeaderboardProps = {
   players?: Player[]
   courses?: Course[]
   groups?: Group[]
   rounds?: Round[]
   tournament?: Tournament | null
+  isAdmin?: boolean
 }
 
 type PlayerStats = {
@@ -23,15 +31,8 @@ type PlayerStats = {
   holesPlayed: number
   totalStrokes: number
   totalPoints: number
-  totalNetScore: number
+  totalNetScore: number // Added total net score for Net Score format
   isComplete: boolean
-}
-
-function getHandicapStrokesForHole(handicap: number, strokeIndex: number): number {
-  if (strokeIndex === 0 || !strokeIndex) return 0
-  const strokesPerHole = Math.floor(handicap / 18)
-  const extraStrokes = handicap % 18
-  return strokesPerHole + (strokeIndex <= extraStrokes ? 1 : 0)
 }
 
 export function PlayerLeaderboard({
@@ -40,8 +41,9 @@ export function PlayerLeaderboard({
   groups = [],
   rounds = [],
   tournament = null,
+  isAdmin = false,
 }: PlayerLeaderboardProps) {
-  const [selectedDay, setSelectedDay] = useState<string>("all")
+  const [selectedDay, setSelectedDay] = useState<string>("overall")
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
 
@@ -95,9 +97,13 @@ export function PlayerLeaderboard({
 
   const filteredRounds = useMemo(() => {
     try {
-      if (selectedDay === "all") {
-        // Return all rounds including warm-up day
-        return safeRounds
+      if (selectedDay === "overall") {
+        const competitionGroups = safeGroups.filter((g) => g?.day && g.day > 0).map((g) => g.id)
+        return safeRounds.filter((r) => r?.groupId && competitionGroups.includes(r.groupId))
+      }
+      if (selectedDay === "practice") {
+        const practiceGroups = safeGroups.filter((g) => g?.day === 0).map((g) => g.id)
+        return safeRounds.filter((r) => r?.groupId && practiceGroups.includes(r.groupId))
       }
       const dayNumber = Number.parseInt(selectedDay)
       const dayGroups = safeGroups.filter((g) => g?.day === dayNumber).map((g) => g.id)
@@ -139,60 +145,75 @@ export function PlayerLeaderboard({
           }
         }
 
-        const roundsByDay = new Map<number, Round>()
+        const roundsByDay = new Map<number, Round[]>()
+
         playerRounds.forEach((round) => {
+          if (!round?.groupId) return
           const group = safeGroups.find((g) => g.id === round.groupId)
           if (!group) return
 
           const day = group.day
-          const existing = roundsByDay.get(day)
+          if (!roundsByDay.has(day)) {
+            roundsByDay.set(day, [])
+          }
+          roundsByDay.get(day)!.push(round)
+        })
 
-          // Keep the most recent round for each day (or the submitted one)
-          if (
-            !existing ||
-            round.submitted ||
-            (round.updatedAt && existing.updatedAt && round.updatedAt > existing.updatedAt)
-          ) {
-            roundsByDay.set(day, round)
+        const selectedRounds: Round[] = []
+        roundsByDay.forEach((dayRounds) => {
+          const completedRounds = dayRounds.filter((r) => r.completed || r.submitted)
+          const roundToUse =
+            completedRounds.length > 0
+              ? completedRounds.sort(
+                  (a, b) =>
+                    new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime(),
+                )[0]
+              : dayRounds.sort(
+                  (a, b) =>
+                    new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime(),
+                )[0]
+
+          if (roundToUse) {
+            selectedRounds.push(roundToUse)
           }
         })
 
-        const selectedRounds = Array.from(roundsByDay.values())
-
         let totalStrokes = 0
         let totalPoints = 0
-        let totalHolesPlayed = 0
         let totalNetScore = 0
+        let totalHolesPlayed = 0
+        let hasCompletedRound = false
 
         selectedRounds.forEach((round) => {
           if (!round?.holes) return
 
           const group = safeGroups.find((g) => g.id === round.groupId)
-          const course = safeCourses.find((c) => c.id === group?.courseId)
+          const course = group ? safeCourses.find((c) => c.id === group.courseId) : null
+          const handicapUsed = round.handicapUsed || player.handicap
 
           const scoredHoles = round.holes.filter((h) => h.strokes > 0)
           totalHolesPlayed += scoredHoles.length
           totalStrokes += scoredHoles.reduce((sum, hole) => sum + hole.strokes, 0)
           totalPoints += scoredHoles.reduce((sum, hole) => sum + hole.points, 0)
 
-          const roundHandicap = round.handicapUsed ?? player.handicap
-
           scoredHoles.forEach((hole) => {
-            if (course?.holes) {
-              const courseHole = course.holes.find((h) => h.holeNumber === hole.holeNumber)
-              const strokeIndex = courseHole?.strokeIndex || hole.holeNumber
-              const handicapStrokes = getHandicapStrokesForHole(roundHandicap, strokeIndex)
+            if (hole.netScore !== undefined && hole.netScore !== null) {
+              // Use stored net score if available
+              totalNetScore += hole.netScore
+            } else if (course?.holes) {
+              // Calculate net score from strokes and handicap
+              const courseHole = course.holes.find((h) => h.number === hole.holeNumber)
+              const strokeIndex = courseHole?.strokeIndex || 0
+              const handicapStrokes = getHandicapStrokesForHole(strokeIndex, handicapUsed, course.holes.length)
               const netScore = hole.strokes - handicapStrokes
               totalNetScore += netScore
-            } else {
-              totalNetScore += hole.strokes
             }
           })
-        })
 
-        const isComplete = selectedRounds.some(
-          (r) => r?.submitted && r?.holes?.length > 0 && r.holes.every((h) => h.strokes > 0),
-        )
+          if (round.completed || round.submitted) {
+            hasCompletedRound = true
+          }
+        })
 
         return {
           playerId: player.id,
@@ -202,7 +223,7 @@ export function PlayerLeaderboard({
           totalStrokes,
           totalPoints,
           totalNetScore,
-          isComplete,
+          isComplete: hasCompletedRound,
         }
       })
 
@@ -210,12 +231,14 @@ export function PlayerLeaderboard({
       const playersWithoutScores = playerStats.filter((p) => p.holesPlayed === 0)
 
       const sortedWithScores = playersWithScores.sort((a, b) => {
-        if (scoringType === "net") {
-          // Sort by net score (lower is better)
-          if (a.totalNetScore !== b.totalNetScore) return a.totalNetScore - b.totalNetScore
-        } else if (scoringType === "strokes") {
+        if (scoringType === "strokes") {
+          // Lower strokes is better
           if (a.totalStrokes !== b.totalStrokes) return a.totalStrokes - b.totalStrokes
+        } else if (scoringType === "net-score") {
+          // Lower net score is better
+          if (a.totalNetScore !== b.totalNetScore) return a.totalNetScore - b.totalNetScore
         } else {
+          // Stableford: higher points is better
           if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints
         }
         return b.holesPlayed - a.holesPlayed
@@ -226,7 +249,7 @@ export function PlayerLeaderboard({
       console.error("[v0] Error in leaderboard calculation:", error)
       return []
     }
-  }, [safePlayers, filteredRounds, scoringType, refreshKey, safeGroups, safeCourses])
+  }, [safePlayers, filteredRounds, scoringType, refreshKey])
 
   const getPositionIcon = (index: number) => {
     if (index === 0) return <Trophy className="w-5 h-5 text-yellow-500" />
@@ -264,7 +287,11 @@ export function PlayerLeaderboard({
               </CardTitle>
               <CardDescription>
                 Auto-refreshing -{" "}
-                {scoringType === "strokes" ? "Stroke Play" : scoringType === "net" ? "Net Score" : "Stableford Points"}
+                {scoringType === "strokes"
+                  ? "Stroke Play"
+                  : scoringType === "net-score"
+                    ? "Net Score"
+                    : "Stableford Points"}
               </CardDescription>
             </div>
           </div>
@@ -277,8 +304,8 @@ export function PlayerLeaderboard({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Overall (All Days)</SelectItem>
-                {hasPlayAroundDay && <SelectItem value="0">Play Around Day</SelectItem>}
+                {hasPlayAroundDay && <SelectItem value="practice">Practice Match</SelectItem>}
+                <SelectItem value="overall">Overall Tournament</SelectItem>
                 {Array.from({ length: numberOfDays }, (_, i) => (
                   <SelectItem key={i + 1} value={(i + 1).toString()}>
                     Day {i + 1}
@@ -348,7 +375,7 @@ export function PlayerLeaderboard({
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Handicap: {playerStats.handicap} •{" "}
+                      Handicap: {fullPlayer?.handicap || 0} •{" "}
                       {playerStats.holesPlayed === 0
                         ? "No scores yet"
                         : playerStats.isComplete
@@ -358,52 +385,30 @@ export function PlayerLeaderboard({
                   </div>
 
                   <div className="text-right space-y-1">
-                    {scoringType === "net" ? (
-                      <div className="flex gap-4">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Net</p>
-                          <p className="text-xl font-bold text-emerald-600">{playerStats.totalNetScore || "-"}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Strokes</p>
-                          <p className="font-semibold">{playerStats.totalStrokes || "-"}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Points</p>
-                          <p className="font-semibold">{playerStats.totalPoints}</p>
-                        </div>
-                      </div>
-                    ) : scoringType === "handicap" ? (
-                      <div className="flex gap-4">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Points</p>
-                          <p className="text-xl font-bold text-emerald-600">{playerStats.totalPoints}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Net</p>
-                          <p className="font-semibold">{playerStats.totalNetScore || "-"}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Strokes</p>
-                          <p className="font-semibold">{playerStats.totalStrokes || "-"}</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex gap-4">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Strokes</p>
-                          <p className="text-xl font-bold text-emerald-600">{playerStats.totalStrokes || "-"}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Net</p>
-                          <p className="font-semibold">{playerStats.totalNetScore || "-"}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Points</p>
-                          <p className="font-semibold">{playerStats.totalPoints}</p>
-                        </div>
-                      </div>
-                    )}
+                    <div className="flex justify-between items-center gap-3">
+                      <span className="text-xs text-muted-foreground">Points</span>
+                      <span
+                        className={`text-base font-bold ${scoringType === "handicap" ? "text-emerald-600" : "text-foreground"}`}
+                      >
+                        {playerStats.totalPoints}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center gap-3">
+                      <span className="text-xs text-muted-foreground">Net</span>
+                      <span
+                        className={`text-base font-bold ${scoringType === "net-score" ? "text-emerald-600" : "text-foreground"}`}
+                      >
+                        {playerStats.totalNetScore || "-"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center gap-3">
+                      <span className="text-xs text-muted-foreground">Strokes</span>
+                      <span
+                        className={`text-base font-bold ${scoringType === "strokes" ? "text-emerald-600" : "text-foreground"}`}
+                      >
+                        {playerStats.totalStrokes || "-"}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )
@@ -420,6 +425,7 @@ export function PlayerLeaderboard({
           courses={courses}
           tournament={tournament}
           onClose={() => setSelectedPlayer(null)}
+          isAdmin={isAdmin}
         />
       )}
     </>

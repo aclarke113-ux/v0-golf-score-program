@@ -5,8 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Trophy, Eye, EyeOff, Plus, ArrowLeft, Shield, HelpCircle, User } from "lucide-react"
+import { Eye, EyeOff, Plus, ArrowLeft, Shield, HelpCircle, User } from "lucide-react"
 import type { User as UserType } from "@/app/page"
+import Image from "next/image"
 import {
   Dialog,
   DialogContent,
@@ -23,7 +24,7 @@ type LoginScreenProps = {
 }
 
 export function LoginScreen({ onLogin, onCreateTournament }: LoginScreenProps) {
-  const [step, setStep] = useState<"enter-code" | "create" | "login" | "admin-login">("enter-code")
+  const [view, setView] = useState<"createTournament" | "playerLogin" | "adminLogin" | "welcome">("welcome")
   const [tournamentCode, setTournamentCode] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -140,7 +141,7 @@ export function LoginScreen({ onLogin, onCreateTournament }: LoginScreenProps) {
       return
     }
 
-    setStep("login")
+    setView("playerLogin")
   }
 
   const handlePlayerLogin = async () => {
@@ -241,159 +242,145 @@ export function LoginScreen({ onLogin, onCreateTournament }: LoginScreenProps) {
     }
   }
 
-  if (step === "create") {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#1a3a0f] via-[#2D5016] to-[#8B7355] flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-3 mb-2">
-              <Trophy className="w-12 h-12 text-[#FFD700]" />
-              <h1 className="text-4xl font-bold text-[#F5F1E8]">Aussie Golf</h1>
-            </div>
-            <p className="text-[#F5F1E8]/80">Create Your Tournament</p>
+  const renderCreateTournament = () => (
+    <div className="min-h-screen overflow-y-auto bg-[#1a3a2e] flex items-center justify-center p-4">
+      <Card className="w-full max-w-md bg-white rounded-lg shadow-lg my-8">
+        <CardContent className="p-6 space-y-4">
+          <Button variant="ghost" onClick={() => setView("welcome")} className="mb-2 hover:bg-gray-100">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold text-gray-900">New Tournament</h2>
+            <p className="text-sm text-gray-600">You will be the tournament admin</p>
           </div>
 
-          <Card className="shadow-2xl border-2 border-[#FFD700]/20">
-            <CardHeader>
+          <div>
+            <Label htmlFor="creator-name">Your Name</Label>
+            <Input
+              id="creator-name"
+              placeholder="e.g., John Smith"
+              value={creatorName}
+              onChange={(e) => setCreatorName(e.target.value)}
+              className="border-[#2D5016]/20"
+              disabled={loading}
+            />
+            <p className="text-xs text-muted-foreground mt-1">You'll be added as the first player and admin</p>
+          </div>
+
+          <div>
+            <Label htmlFor="tournament-name">Tournament Name</Label>
+            <Input
+              id="tournament-name"
+              placeholder="e.g., Spring Classic 2025"
+              value={newTournamentName}
+              onChange={(e) => setNewTournamentName(e.target.value)}
+              className="border-[#2D5016]/20"
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="player-password">Player Password</Label>
+            <div className="relative">
+              <Input
+                id="player-password"
+                type={showNewPassword ? "text" : "password"}
+                placeholder="Password for players to join"
+                value={newTournamentPassword}
+                onChange={(e) => setNewTournamentPassword(e.target.value)}
+                className="border-[#2D5016]/20"
+                disabled={loading}
+              />
               <Button
+                type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => setStep("enter-code")}
-                className="w-fit -ml-2 mb-2"
+                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                onClick={() => setShowNewPassword(!showNewPassword)}
                 disabled={loading}
               >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
+                {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </Button>
-              <CardTitle>New Tournament</CardTitle>
-              <CardDescription>You will be the tournament admin</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="creator-name">Your Name</Label>
-                <Input
-                  id="creator-name"
-                  placeholder="e.g., John Smith"
-                  value={creatorName}
-                  onChange={(e) => setCreatorName(e.target.value)}
-                  className="border-[#2D5016]/20"
-                  disabled={loading}
-                />
-                <p className="text-xs text-muted-foreground mt-1">You'll be added as the first player and admin</p>
-              </div>
-
-              <div>
-                <Label htmlFor="tournament-name">Tournament Name</Label>
-                <Input
-                  id="tournament-name"
-                  placeholder="e.g., Spring Classic 2025"
-                  value={newTournamentName}
-                  onChange={(e) => setNewTournamentName(e.target.value)}
-                  className="border-[#2D5016]/20"
-                  disabled={loading}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="player-password">Player Password</Label>
-                <div className="relative">
-                  <Input
-                    id="player-password"
-                    type={showNewPassword ? "text" : "password"}
-                    placeholder="Password for players to join"
-                    value={newTournamentPassword}
-                    onChange={(e) => setNewTournamentPassword(e.target.value)}
-                    className="border-[#2D5016]/20"
-                    disabled={loading}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                    onClick={() => setShowNewPassword(!showNewPassword)}
-                    disabled={loading}
-                  >
-                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">Players use this to join the tournament</p>
-              </div>
-
-              <div>
-                <Label htmlFor="confirm-password">Confirm Player Password</Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  placeholder="Re-enter player password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="border-[#2D5016]/20"
-                  disabled={loading}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="admin-password">Admin Password</Label>
-                <div className="relative">
-                  <Input
-                    id="admin-password"
-                    type={showNewAdminPassword ? "text" : "password"}
-                    placeholder="Password for admin access"
-                    value={newAdminPassword}
-                    onChange={(e) => setNewAdminPassword(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && !loading && handleCreateTournament()}
-                    className="border-[#2D5016]/20"
-                    disabled={loading}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                    onClick={() => setShowNewAdminPassword(!showNewAdminPassword)}
-                    disabled={loading}
-                  >
-                    {showNewAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">Keep this secure - only for admin access</p>
-              </div>
-
-              <Button
-                onClick={handleCreateTournament}
-                className="w-full bg-[#2D5016] hover:bg-[#1a3a0f]"
-                size="lg"
-                disabled={loading}
-              >
-                {loading ? "Creating..." : "Create Tournament"}
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
-  if (step === "login") {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#1a3a0f] via-[#2D5016] to-[#8B7355] flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-3 mb-2">
-              <Trophy className="w-12 h-12 text-[#FFD700]" />
-              <h1 className="text-4xl font-bold text-[#F5F1E8]">Aussie Golf</h1>
             </div>
-            <p className="text-[#F5F1E8]/80">Tournament: {tournamentCode}</p>
+            <p className="text-xs text-muted-foreground mt-1">Players use this to join the tournament</p>
           </div>
 
-          <Card className="shadow-2xl border-2 border-[#FFD700]/20">
+          <div>
+            <Label htmlFor="confirm-password">Confirm Player Password</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              placeholder="Re-enter player password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="border-[#2D5016]/20"
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="admin-password">Admin Password</Label>
+            <div className="relative">
+              <Input
+                id="admin-password"
+                type={showNewAdminPassword ? "text" : "password"}
+                placeholder="Password for admin access"
+                value={newAdminPassword}
+                onChange={(e) => setNewAdminPassword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !loading && handleCreateTournament()}
+                className="border-[#2D5016]/20"
+                disabled={loading}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                onClick={() => setShowNewAdminPassword(!showNewAdminPassword)}
+                disabled={loading}
+              >
+                {showNewAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Keep this secure - only for admin access</p>
+          </div>
+
+          <Button
+            onClick={handleCreateTournament}
+            className="w-full bg-[#2D5016] hover:bg-[#1a3a0f]"
+            size="lg"
+            disabled={loading}
+          >
+            {loading ? "Creating..." : "Create Tournament"}
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
+
+  if (view === "createTournament") {
+    return renderCreateTournament()
+  }
+
+  if (view === "playerLogin") {
+    return (
+      <div className="h-screen bg-[#1a3a2e] flex items-center justify-center p-4 overflow-hidden">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-6">
+            <div className="flex items-center justify-center mb-4">
+              <Image src="/aussie-slice-logo.png" alt="Aussie Slice" width={250} height={250} priority />
+            </div>
+          </div>
+
+          <Card className="shadow-2xl border-2 border-[#FFD700]/30 backdrop-blur-sm bg-white/95">
             <CardHeader>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  setStep("enter-code")
+                  setView("welcome")
                   setPlayerName("")
                   setPlayerPassword("")
                 }}
@@ -468,7 +455,7 @@ export function LoginScreen({ onLogin, onCreateTournament }: LoginScreenProps) {
 
               <Button
                 onClick={() => {
-                  setStep("admin-login")
+                  setView("adminLogin")
                   setPlayerName("")
                   setPlayerPassword("")
                 }}
@@ -486,25 +473,24 @@ export function LoginScreen({ onLogin, onCreateTournament }: LoginScreenProps) {
     )
   }
 
-  if (step === "admin-login") {
+  if (view === "adminLogin") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#1a3a0f] via-[#2D5016] to-[#8B7355] flex items-center justify-center p-4">
+      <div className="h-screen bg-[#1a3a2e] flex items-center justify-center p-4 overflow-hidden">
         <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-3 mb-2">
-              <Trophy className="w-12 h-12 text-[#FFD700]" />
-              <h1 className="text-4xl font-bold text-[#F5F1E8]">Aussie Golf</h1>
+          <div className="text-center mb-6">
+            <div className="flex items-center justify-center mb-4">
+              <Image src="/aussie-slice-logo.png" alt="Aussie Slice" width={250} height={250} priority />
             </div>
-            <p className="text-[#F5F1E8]/80">Tournament: {tournamentCode}</p>
+            <p className="text-[#FFD700] text-lg font-semibold tracking-wide">Tournament: {tournamentCode}</p>
           </div>
 
-          <Card className="shadow-2xl border-2 border-[#FFD700]/20">
+          <Card className="shadow-2xl border-2 border-[#FFD700]/30 backdrop-blur-sm bg-white/95">
             <CardHeader>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  setStep("login")
+                  setView("playerLogin")
                   setAdminPassword("")
                 }}
                 className="w-fit -ml-2 mb-2"
@@ -562,22 +548,20 @@ export function LoginScreen({ onLogin, onCreateTournament }: LoginScreenProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#1a3a0f] via-[#2D5016] to-[#8B7355] flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Trophy className="w-16 h-16 text-[#FFD700] drop-shadow-lg" />
-            <h1 className="text-5xl font-bold text-[#F5F1E8] drop-shadow-lg">Aussie Golf</h1>
+    <div className="h-screen bg-[#1a3a2e] flex items-center justify-center p-4 overflow-hidden">
+      <div className="w-full max-w-md space-y-4">
+        <div className="text-center">
+          <div className="flex items-center justify-center mb-2">
+            <Image src="/aussie-slice-logo.png" alt="Aussie Slice" width={200} height={200} priority />
           </div>
-          <p className="text-[#F5F1E8]/90 text-lg">Professional Tournament Management</p>
         </div>
 
-        <Card className="shadow-2xl border-2 border-[#FFD700]/20 backdrop-blur-sm">
-          <CardHeader className="text-center">
+        <Card className="shadow-2xl border-2 border-[#FFD700]/30 backdrop-blur-sm bg-white/95">
+          <CardHeader className="text-center pb-4">
             <CardTitle className="text-2xl">Welcome</CardTitle>
             <CardDescription>Enter your tournament code or create a new tournament</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="tournament-code" className="text-base">
                 Tournament Code
@@ -699,7 +683,7 @@ export function LoginScreen({ onLogin, onCreateTournament }: LoginScreenProps) {
             </div>
 
             <Button
-              onClick={() => setStep("create")}
+              onClick={() => setView("createTournament")}
               variant="outline"
               className="w-full border-2 border-[#FFD700]/30 hover:bg-[#FFD700]/10"
               size="lg"

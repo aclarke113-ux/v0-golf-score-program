@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Plus, MapPin } from "lucide-react"
+import { AustralianCourseSelector } from "./australian-course-selector"
 
 interface Course {
   id: string
@@ -21,6 +22,7 @@ export function CoursesManagement({ competitionId }: { competitionId: string }) 
   const [loading, setLoading] = useState(false)
   const [name, setName] = useState("")
   const [numHoles, setNumHoles] = useState(18)
+  const [showAustralianCourses, setShowAustralianCourses] = useState(false)
 
   useEffect(() => {
     loadCourses()
@@ -66,44 +68,90 @@ export function CoursesManagement({ competitionId }: { competitionId: string }) 
     setLoading(false)
   }
 
+  const handleAustralianCourseSelected = async (australianCourse: any) => {
+    setLoading(true)
+
+    // Convert Australian course data to tournament course format
+    const holes = australianCourse.holes.map((h: any, idx: number) => ({
+      holeNumber: h.number,
+      par: h.par,
+      strokeIndex: idx + 1, // Default stroke index
+    }))
+
+    const { error } = await supabase.from("courses").insert({
+      competition_id: competitionId,
+      name: australianCourse.name,
+      par: australianCourse.par,
+      holes,
+    })
+
+    if (!error) {
+      loadCourses()
+      setShowAustralianCourses(false)
+    }
+
+    setLoading(false)
+  }
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Add Course</CardTitle>
-          <CardDescription>Create a new golf course for the competition</CardDescription>
+          <CardDescription>Select from Australian courses or create a custom course</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1 space-y-2">
-              <Label htmlFor="course-name">Course Name</Label>
-              <Input
-                id="course-name"
-                placeholder="Pebble Beach"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && createStandardCourse()}
-              />
-            </div>
-            <div className="w-32 space-y-2">
-              <Label htmlFor="num-holes">Holes</Label>
-              <Input
-                id="num-holes"
-                type="number"
-                min="9"
-                max="18"
-                value={numHoles}
-                onChange={(e) => setNumHoles(Number.parseInt(e.target.value) || 18)}
-              />
-            </div>
-            <div className="flex items-end">
-              <Button onClick={createStandardCourse} disabled={loading || !name.trim()}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create
-              </Button>
-            </div>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setShowAustralianCourses(!showAustralianCourses)}
+              variant={showAustralianCourses ? "secondary" : "default"}
+              className="flex-1"
+            >
+              <MapPin className="mr-2 h-4 w-4" />
+              {showAustralianCourses ? "Hide" : "Search"} Australian Courses
+            </Button>
           </div>
-          <p className="mt-2 text-sm text-gray-600">Creates a standard par 72 course (18 holes) or par 36 (9 holes)</p>
+
+          {showAustralianCourses && (
+            <AustralianCourseSelector tournamentId={competitionId} onCourseSelected={handleAustralianCourseSelected} />
+          )}
+
+          {!showAustralianCourses && (
+            <>
+              <div className="flex gap-4">
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="course-name">Or Create Custom Course</Label>
+                  <Input
+                    id="course-name"
+                    placeholder="Pebble Beach"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && createStandardCourse()}
+                  />
+                </div>
+                <div className="w-32 space-y-2">
+                  <Label htmlFor="num-holes">Holes</Label>
+                  <Input
+                    id="num-holes"
+                    type="number"
+                    min="9"
+                    max="18"
+                    value={numHoles}
+                    onChange={(e) => setNumHoles(Number.parseInt(e.target.value) || 18)}
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button onClick={createStandardCourse} disabled={loading || !name.trim()}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create
+                  </Button>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Creates a standard par 72 course (18 holes) or par 36 (9 holes)
+              </p>
+            </>
+          )}
         </CardContent>
       </Card>
 

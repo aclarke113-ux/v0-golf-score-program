@@ -45,6 +45,7 @@ export function GroupManagement({
   const [playerError, setPlayerError] = useState<string>("")
   const [loading, setLoading] = useState(false)
   const [numberOfDays, setNumberOfDays] = useState<number>(2)
+  const [hasPlayAroundDay, setHasPlayAroundDay] = useState<boolean>(false)
 
   useEffect(() => {
     console.log("[v0] GroupManagement component mounted", {
@@ -95,13 +96,13 @@ export function GroupManagement({
   }, [currentTournamentId])
 
   useEffect(() => {
-    if (!currentTournamentId) return
-
     const loadTournament = async () => {
+      if (!currentTournamentId) return
       try {
         const tournament = await getTournamentById(currentTournamentId)
         if (tournament) {
           setNumberOfDays(tournament.numberOfDays || 2)
+          setHasPlayAroundDay(tournament.hasPlayAroundDay || false)
         }
       } catch (error) {
         console.error("[v0] Error loading tournament:", error)
@@ -426,7 +427,7 @@ export function GroupManagement({
                   />
                 </div>
 
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="day-select">Competition Day</Label>
                   <Select
                     value={selectedDay.toString()}
@@ -437,6 +438,7 @@ export function GroupManagement({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      {hasPlayAroundDay && <SelectItem value="0">Play Around Day</SelectItem>}
                       {Array.from({ length: numberOfDays }, (_, i) => i + 1).map((day) => (
                         <SelectItem key={day} value={day.toString()}>
                           Day {day}
