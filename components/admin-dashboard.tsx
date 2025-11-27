@@ -340,6 +340,7 @@ export function AdminDashboard({
                 players={players}
                 courses={courses}
                 currentTournament={currentTournament}
+                onDataChange={onDataChange} // Added onDataChange to trigger full tournament data refresh
               />
             </TabsContent>
 

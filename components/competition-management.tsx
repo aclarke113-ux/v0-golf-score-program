@@ -21,6 +21,7 @@ type CompetitionManagementProps = {
   players: Player[]
   courses: Course[]
   currentTournament: Tournament | null
+  onDataChange?: () => Promise<void> // Added onDataChange callback
 }
 
 export function CompetitionManagement({
@@ -30,6 +31,7 @@ export function CompetitionManagement({
   players,
   courses,
   currentTournament,
+  onDataChange, // Destructured onDataChange from props
 }: CompetitionManagementProps) {
   const [localCompetitions, setLocalCompetitions] = useState<Competition[]>([])
   const [localCourses, setLocalCourses] = useState<Course[]>([])
@@ -100,7 +102,7 @@ export function CompetitionManagement({
         // Competition doesn't exist, create it (toggle on)
         await createCompetition({
           type,
-          holeNumber, // Ensure holeNumber is explicitly passed
+          holeNumber,
           day,
           courseId: selectedCourse,
           tournamentId: currentTournament.id,
@@ -111,6 +113,10 @@ export function CompetitionManagement({
       const updatedCompetitions = await getCompetitionsByTournament(currentTournament.id)
       setLocalCompetitions(updatedCompetitions as Competition[])
       setCompetitions(updatedCompetitions as Competition[])
+
+      if (onDataChange) {
+        await onDataChange()
+      }
     } catch (error) {
       console.error("[v0] Error toggling competition:", error)
       alert("Failed to update competition. Please try again.")
