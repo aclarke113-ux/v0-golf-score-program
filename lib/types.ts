@@ -65,7 +65,10 @@ export interface Round {
   totalPoints: number
   completed: boolean
   submitted: boolean
-  handicapUsed: number // Store the handicap that was used for this round so changes don't affect past rounds
+  handicapUsed: number
+  referenceScores?: { [holeNumber: number]: number } // Player's own tracked scores
+  scoreDiscrepancyFlagged?: boolean // Flag if there's a mismatch between official and reference scores
+  discrepancyNotes?: string // Notes about the discrepancy
 }
 
 export interface Competition {

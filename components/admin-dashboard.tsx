@@ -14,6 +14,7 @@ import { AdminPredictions } from "@/components/admin-predictions"
 import { AdminAuction } from "@/components/admin-auction"
 import { TournamentSettings } from "@/components/tournament-settings"
 import { GenerateAchievementsButton } from "@/components/admin/generate-achievements-button"
+import { RoundsOverview } from "@/components/admin/rounds-overview"
 import type {
   Player,
   Course,
@@ -179,7 +180,7 @@ export function AdminDashboard({
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="mb-8">
               {/* Desktop tabs */}
-              <TabsList className="hidden md:grid w-full grid-cols-8 gap-2 bg-[#2D5016]/50 p-2">
+              <TabsList className="hidden md:grid w-full grid-cols-9 gap-2 bg-[#2D5016]/50 p-2">
                 <TabsTrigger
                   value="players"
                   className="data-[state=active]:bg-[#FFD700] data-[state=active]:text-[#1a3a0f]"
@@ -197,6 +198,12 @@ export function AdminDashboard({
                   className="data-[state=active]:bg-[#FFD700] data-[state=active]:text-[#1a3a0f]"
                 >
                   Groups
+                </TabsTrigger>
+                <TabsTrigger
+                  value="rounds"
+                  className="data-[state=active]:bg-[#FFD700] data-[state=active]:text-[#1a3a0f]"
+                >
+                  Rounds
                 </TabsTrigger>
                 <TabsTrigger
                   value="competitions"
@@ -263,6 +270,13 @@ export function AdminDashboard({
                         className="w-full justify-start text-[#F5F1E8]"
                       >
                         Groups
+                      </Button>
+                      <Button
+                        onClick={() => handleTabChange("rounds")}
+                        variant={activeTab === "rounds" ? "default" : "ghost"}
+                        className="w-full justify-start text-[#F5F1E8]"
+                      >
+                        Rounds
                       </Button>
                       <Button
                         onClick={() => handleTabChange("competitions")}
@@ -391,6 +405,10 @@ export function AdminDashboard({
                 rounds={rounds}
                 setRounds={setRounds}
               />
+            </TabsContent>
+
+            <TabsContent value="rounds" className="mt-6">
+              <RoundsOverview rounds={rounds} onDataChange={onDataChange} />
             </TabsContent>
           </Tabs>
         </div>

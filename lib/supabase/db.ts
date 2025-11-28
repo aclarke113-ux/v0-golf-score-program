@@ -105,6 +105,9 @@ const transformRound = (dbRound: any): Round => {
     completed: holes.length > 0 && holes.every((h: any) => h.strokes > 0),
     submitted: dbRound.submitted || false,
     handicapUsed: dbRound.handicap_used || 0,
+    referenceScores: dbRound.reference_scores || undefined,
+    scoreDiscrepancyFlagged: dbRound.score_discrepancy_flagged || false,
+    discrepancyNotes: dbRound.discrepancy_notes || undefined,
   }
 }
 
@@ -580,6 +583,10 @@ export async function updateRound(id: string, updates: Partial<Round>) {
   }
   if (updates.handicapUsed !== undefined) updateData.handicap_used = updates.handicapUsed
   if (updates.submitted !== undefined) updateData.submitted = updates.submitted
+  if (updates.referenceScores !== undefined) updateData.reference_scores = updates.referenceScores
+  if (updates.scoreDiscrepancyFlagged !== undefined)
+    updateData.score_discrepancy_flagged = updates.scoreDiscrepancyFlagged
+  if (updates.discrepancyNotes !== undefined) updateData.discrepancy_notes = updates.discrepancyNotes
 
   const { data, error } = await supabase.from("rounds").update(updateData).eq("id", id).select().single()
 

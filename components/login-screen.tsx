@@ -8,14 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Eye, EyeOff, Plus, ArrowLeft, Shield, HelpCircle, User } from "lucide-react"
 import type { User as UserType } from "@/app/page"
 import Image from "next/image"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { getAllTournaments, getTournamentByCode, getPlayersByTournament } from "@/lib/supabase/db"
 
 type LoginScreenProps = {
@@ -548,22 +541,22 @@ export function LoginScreen({ onLogin, onCreateTournament }: LoginScreenProps) {
   }
 
   return (
-    <div className="h-screen bg-[#1a3a2e] flex items-center justify-center p-4 overflow-hidden">
-      <div className="w-full max-w-md space-y-4">
+    <div className="h-screen bg-[#1a3a2e] flex items-center justify-center p-3 overflow-hidden">
+      <div className="w-full max-w-md space-y-2">
         <div className="text-center">
           <div className="flex items-center justify-center mb-2">
-            <Image src="/aussie-slice-logo.png" alt="Aussie Slice" width={200} height={200} priority />
+            <Image src="/aussie-slice-logo.png" alt="Aussie Slice" width={120} height={120} priority />
           </div>
         </div>
 
         <Card className="shadow-2xl border-2 border-[#FFD700]/30 backdrop-blur-sm bg-white/95">
-          <CardHeader className="text-center pb-4">
+          <CardHeader className="text-center pb-3 pt-4 space-y-1">
             <CardTitle className="text-2xl">Welcome</CardTitle>
-            <CardDescription>Enter your tournament code or create a new tournament</CardDescription>
+            <CardDescription className="text-sm">Enter your tournament code or create a new tournament</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="tournament-code" className="text-base">
+          <CardContent className="space-y-3 px-5 pb-5">
+            <div className="space-y-1.5">
+              <Label htmlFor="tournament-code" className="text-sm font-medium">
                 Tournament Code
               </Label>
               <Input
@@ -571,122 +564,43 @@ export function LoginScreen({ onLogin, onCreateTournament }: LoginScreenProps) {
                 placeholder="Enter 6-digit code"
                 value={tournamentCode}
                 onChange={(e) => setTournamentCode(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === "Enter" && handleCodeEntry()}
-                className="text-center text-2xl font-bold tracking-widest border-[#2D5016]/20"
                 maxLength={6}
+                className="border-[#2D5016]/20 text-center text-lg font-mono tracking-widest uppercase h-10"
                 disabled={loading}
               />
               <p className="text-xs text-muted-foreground text-center">Get this code from your tournament admin</p>
             </div>
-
             <Button
               onClick={handleCodeEntry}
-              className="w-full bg-[#2D5016] hover:bg-[#1a3a0f]"
-              size="lg"
+              className="w-full bg-[#1a3a2e] hover:bg-[#1a3a2e]/90 h-10"
               disabled={loading}
             >
-              Join Tournament
+              {loading ? "Joining..." : "Join Tournament"}
             </Button>
 
-            <Dialog open={showForgotCode} onOpenChange={setShowForgotCode}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="link"
-                  className="w-full text-sm text-muted-foreground hover:text-[#FFD700]"
-                  disabled={loading}
-                >
-                  <HelpCircle className="w-4 h-4 mr-2" />
-                  Forgot Tournament Code? (Admin Only)
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <Shield className="w-5 h-5 text-[#FFD700]" />
-                    Retrieve Tournament Code
-                  </DialogTitle>
-                  <DialogDescription>
-                    Enter your tournament name and admin password to retrieve your code
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  {!retrievedCode ? (
-                    <>
-                      <div>
-                        <Label htmlFor="forgot-name">Tournament Name</Label>
-                        <Input
-                          id="forgot-name"
-                          placeholder="Enter exact tournament name"
-                          value={forgotTournamentName}
-                          onChange={(e) => setForgotTournamentName(e.target.value)}
-                          className="border-[#2D5016]/20"
-                          disabled={loading}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="forgot-password">Admin Password</Label>
-                        <div className="relative">
-                          <Input
-                            id="forgot-password"
-                            type={showForgotPassword ? "text" : "password"}
-                            placeholder="Enter admin password"
-                            value={forgotAdminPassword}
-                            onChange={(e) => setForgotAdminPassword(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && !loading && handleRetrieveCode()}
-                            className="border-[#2D5016]/20"
-                            disabled={loading}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                            onClick={() => setShowForgotPassword(!showForgotPassword)}
-                            disabled={loading}
-                          >
-                            {showForgotPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                          </Button>
-                        </div>
-                      </div>
-                      <Button
-                        onClick={handleRetrieveCode}
-                        className="w-full bg-[#2D5016] hover:bg-[#1a3a0f]"
-                        disabled={loading}
-                      >
-                        {loading ? "Retrieving..." : "Retrieve Code"}
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-center space-y-4">
-                        <div className="p-6 bg-[#2D5016]/10 rounded-lg border-2 border-[#FFD700]/30">
-                          <p className="text-sm text-muted-foreground mb-2">Your Tournament Code</p>
-                          <p className="text-4xl font-bold tracking-widest text-[#FFD700]">{retrievedCode}</p>
-                        </div>
-                        <Button onClick={handleCopyRetrievedCode} className="w-full bg-[#2D5016] hover:bg-[#1a3a0f]">
-                          Copy Code & Continue
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Button
+              variant="ghost"
+              onClick={() => setShowForgotCode(true)}
+              className="w-full text-xs"
+              disabled={loading}
+            >
+              <HelpCircle className="w-3 h-3 mr-1" />
+              Forgot Tournament Code? (Admin Only)
+            </Button>
 
-            <div className="relative">
+            <div className="relative my-3">
               <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-[#2D5016]/20" />
+                <span className="w-full border-t" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">Or</span>
+                <span className="bg-white px-2 text-muted-foreground">OR</span>
               </div>
             </div>
 
             <Button
               onClick={() => setView("createTournament")}
               variant="outline"
-              className="w-full border-2 border-[#FFD700]/30 hover:bg-[#FFD700]/10"
-              size="lg"
+              className="w-full h-10"
               disabled={loading}
             >
               <Plus className="w-5 h-5 mr-2" />
@@ -695,6 +609,78 @@ export function LoginScreen({ onLogin, onCreateTournament }: LoginScreenProps) {
           </CardContent>
         </Card>
       </div>
+      <Dialog open={showForgotCode} onOpenChange={setShowForgotCode}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-[#FFD700]" />
+              Retrieve Tournament Code
+            </DialogTitle>
+            <DialogDescription>Enter your tournament name and admin password to retrieve your code</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {!retrievedCode ? (
+              <>
+                <div>
+                  <Label htmlFor="forgot-name">Tournament Name</Label>
+                  <Input
+                    id="forgot-name"
+                    placeholder="Enter exact tournament name"
+                    value={forgotTournamentName}
+                    onChange={(e) => setForgotTournamentName(e.target.value)}
+                    className="border-[#2D5016]/20"
+                    disabled={loading}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="forgot-password">Admin Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="forgot-password"
+                      type={showForgotPassword ? "text" : "password"}
+                      placeholder="Enter admin password"
+                      value={forgotAdminPassword}
+                      onChange={(e) => setForgotAdminPassword(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && !loading && handleRetrieveCode()}
+                      className="border-[#2D5016]/20"
+                      disabled={loading}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                      onClick={() => setShowForgotPassword(!showForgotPassword)}
+                      disabled={loading}
+                    >
+                      {showForgotPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleRetrieveCode}
+                  className="w-full bg-[#2D5016] hover:bg-[#1a3a0f]"
+                  disabled={loading}
+                >
+                  {loading ? "Retrieving..." : "Retrieve Code"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="text-center space-y-4">
+                  <div className="p-6 bg-[#2D5016]/10 rounded-lg border-2 border-[#FFD700]/30">
+                    <p className="text-sm text-muted-foreground mb-2">Your Tournament Code</p>
+                    <p className="text-4xl font-bold tracking-widest text-[#FFD700]">{retrievedCode}</p>
+                  </div>
+                  <Button onClick={handleCopyRetrievedCode} className="w-full bg-[#2D5016] hover:bg-[#1a3a0f]">
+                    Copy Code & Continue
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
