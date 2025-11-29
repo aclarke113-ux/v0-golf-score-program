@@ -5,9 +5,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ChevronLeft, ChevronRight, Menu, Minus, Plus } from "lucide-react" // Added Menu, Minus, Plus
+import { ChevronLeft, ChevronRight, Minus, Plus, Trophy } from "lucide-react" // Added Menu, Minus, Plus, Trophy
 import { Users } from "lucide-react"
-import type { Player, Course, Round, HoleScore, Competition, CompetitionEntry, Group, Notification } from "@/lib/types"
+import type {
+  Player,
+  Course,
+  Round,
+  HoleScore,
+  Competition,
+  CompetitionEntry,
+  Group,
+  Notification,
+  Tournament,
+} from "@/lib/types"
 import {
   createRound,
   updateRound,
@@ -19,6 +29,15 @@ import {
 } from "@/lib/supabase/db"
 import { detectAchievements, postAchievement, checkAndPostCompetitionAchievement } from "@/lib/achievements"
 import { PlayCircle } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog" // Added Dialog components
+import { PlayerLeaderboard } from "@/components/player-leaderboard" // Added PlayerLeaderboard component
 
 type PlayerScoreEntryProps = {
   currentUser: { id: string; name: string; tournamentId: string; handicap: number } // Added handicap to currentUser
@@ -33,6 +52,7 @@ type PlayerScoreEntryProps = {
   notifications: Notification[]
   setNotifications: (notifications: Notification[]) => void
   onDataChange?: () => Promise<void>
+  tournament: Tournament // Added tournament prop
 }
 
 // Calculate Stableford points based on strokes vs par with handicap
@@ -72,6 +92,7 @@ export function PlayerScoreEntry({
   notifications,
   setNotifications,
   onDataChange, // Added onDataChange callback
+  tournament, // Destructure tournament prop
 }: PlayerScoreEntryProps) {
   const [selectedGroupId, setSelectedGroupId] = useState<string>("")
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("")
@@ -92,6 +113,13 @@ export function PlayerScoreEntry({
     playerName: string
     hole: number
   } | null>(null)
+
+  const [showLeaderboard, setShowLeaderboard] = useState(false)
+
+  const [showDiscrepancyDialog, setShowDiscrepancyDialog] = useState(false)
+  const [scoreDiscrepancies, setScoreDiscrepancies] = useState<
+    Array<{ hole: number; official: number; reference: number }>
+  >([])
 
   const [roundTimer, setRoundTimer] = useState("00:00:00")
 
@@ -299,17 +327,28 @@ export function PlayerScoreEntry({
   }, [referenceScores, course?.holes, currentPlayer?.handicap, course?.holes?.length])
 
   const saveProgress = async () => {
+    console.log("[v0] saveProgress called:", {
+      selectedGroupId,
+      selectedPlayerId,
+      hasScores: Object.values(holeScores).some((score) => score && Number.parseInt(score) > 0),
+      holeScores,
+      isSaving: isSavingRef.current,
+    })
+
     if (!selectedGroupId || !selectedPlayerId || !course || !currentUser.tournamentId || isSavingRef.current) {
+      console.log("[v0] saveProgress early return - missing requirements")
       return
     }
 
     const player = players.find((p) => p.id === selectedPlayerId)
     if (!player) {
+      console.log("[v0] saveProgress early return - player not found")
       return
     }
 
     const hasScores = Object.values(holeScores).some((score) => score && Number.parseInt(score) > 0)
     if (!hasScores) {
+      console.log("[v0] saveProgress early return - no scores to save")
       return
     }
 
@@ -436,6 +475,7 @@ export function PlayerScoreEntry({
 
       setRounds(updatedRounds)
       lastSavedScoresRef.current = JSON.stringify(holeScores)
+      console.log("[v0] saveProgress SUCCESS - round saved to database")
     } catch (error) {
       console.error("[v0] Error saving round:", error)
     } finally {
@@ -445,6 +485,7 @@ export function PlayerScoreEntry({
 
   const updateHoleScore = (holeNumber: number, value: string) => {
     if (isLocked) return
+    console.log("[v0] updateHoleScore:", { holeNumber, value, currentHoleScores: holeScores })
     setHoleScores({ ...holeScores, [holeNumber]: value })
     if (pickedUpHoles[holeNumber]) {
       setPickedUpHoles({ ...pickedUpHoles, [holeNumber]: false })
@@ -524,6 +565,30 @@ export function PlayerScoreEntry({
       playerName: player.name,
       courseHoles: course.holes.length,
     })
+
+    if (selectedPlayerId === currentUser?.id && Object.keys(referenceScores).length > 0) {
+      const discrepancies: Array<{ hole: number; official: number; reference: number }> = []
+
+      Object.entries(referenceScores).forEach(([holeStr, refScore]) => {
+        const holeNum = Number.parseInt(holeStr)
+        const officialScore = Number.parseInt(holeScores[holeNum] || "0")
+
+        if (refScore !== officialScore) {
+          discrepancies.push({
+            hole: holeNum,
+            official: officialScore,
+            reference: refScore,
+          })
+        }
+      })
+
+      if (discrepancies.length > 0) {
+        console.log("[v0] Score discrepancies found:", discrepancies)
+        setScoreDiscrepancies(discrepancies)
+        setShowDiscrepancyDialog(true)
+        return // Don't submit yet, show dialog first
+      }
+    }
 
     try {
       let savedRound: Round
@@ -987,6 +1052,76 @@ export function PlayerScoreEntry({
     submitRound()
   }
 
+  const proceedWithSubmission = async () => {
+    setShowDiscrepancyDialog(false)
+
+    if (!selectedGroupId || !selectedPlayerId || !course || !currentUser.tournamentId) return
+
+    const player = players.find((p) => p.id === selectedPlayerId)
+    if (!player) return
+
+    const handicapToUse = existingRound?.handicapUsed || player.handicap
+
+    const holes: HoleScore[] = course.holes.map((hole) => {
+      const strokes = Number.parseInt(holeScores[hole.holeNumber] || "0") || 0
+      const handicapStrokes = getHandicapStrokesForHole(
+        hole.strokeIndex || hole.holeNumber,
+        handicapToUse,
+        course.holes.length,
+      )
+      const points = calculateStablefordPoints(strokes, hole.par, handicapStrokes)
+      const netScore = strokes > 0 ? calculateNetScore(strokes, handicapStrokes) : 0
+
+      return {
+        holeNumber: hole.holeNumber,
+        strokes,
+        points,
+        netScore,
+        penalty: 0,
+      }
+    })
+
+    const totalGross = holes.reduce((sum, h) => sum + h.strokes, 0)
+    const totalPoints = holes.reduce((sum, h) => sum + h.points, 0)
+
+    const roundData = {
+      groupId: selectedGroupId,
+      playerId: selectedPlayerId,
+      tournamentId: currentUser.tournamentId,
+      day: selectedGroup?.day || 1,
+      holes,
+      totalGross,
+      totalPoints,
+      completed: true,
+      submitted: true,
+      handicapUsed: handicapToUse,
+    }
+
+    try {
+      let savedRound: Round
+      if (existingRound?.id) {
+        savedRound = await updateRound(existingRound.id, roundData)
+      } else {
+        savedRound = await createRound(roundData)
+      }
+
+      const updatedRounds = existingRound
+        ? rounds.map((r) => (r.id === existingRound.id ? savedRound : r))
+        : [...rounds, savedRound]
+
+      setRounds(updatedRounds)
+      // Set isLocked state if needed, e.g., from the savedRound object
+      // setExistingRound({ ...savedRound, isLocked: true }); // This might need adjustment based on how isLocked is managed
+      // Assuming `submitRound` itself sets the final state, this might just need to close the dialog and handle UI feedback.
+
+      // Close dialog and perhaps trigger a broader UI update or navigation
+      // For now, just close the dialog and the original submitRound logic will show the final alert.
+    } catch (error) {
+      console.error("[v0] Error submitting round:", error)
+      alert("Failed to submit round. Please try again.")
+    }
+  }
+
   if (showStartingTeePrompt) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -1011,267 +1146,171 @@ export function PlayerScoreEntry({
   const isScoringYourself = selectedPlayerId === currentUser.id
 
   return (
-    <div className="space-y-6 pb-4">
-      {savedSession && !selectedPlayerId && (
-        <div className="mb-4 p-4 bg-primary/10 border border-primary/20 rounded-lg">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <PlayCircle className="w-5 h-5 text-primary" />
-                <h3 className="font-semibold">Resume Your Game</h3>
-              </div>
-              <div className="space-y-1 text-sm text-muted-foreground">
-                <div>
-                  <span className="font-medium text-foreground">{savedSession.playerName}</span>
+    <>
+      <div className="space-y-6 pb-4">
+        {savedSession && !selectedPlayerId && (
+          <div className="mb-4 p-4 bg-primary/10 border border-primary/20 rounded-lg">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <PlayCircle className="w-5 h-5 text-primary" />
+                  <h3 className="font-semibold">Resume Your Game</h3>
                 </div>
-                <div>{savedSession.groupName}</div>
-                <div>Currently on hole {savedSession.hole}</div>
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <div>
+                    <span className="font-medium text-foreground">{savedSession.playerName}</span>
+                  </div>
+                  <div>{savedSession.groupName}</div>
+                  <div>Currently on hole {savedSession.hole}</div>
+                </div>
               </div>
+              <Button onClick={handleResumeGame} className="flex items-center gap-2">
+                <PlayCircle className="w-4 h-4" />
+                Resume
+              </Button>
             </div>
-            <Button onClick={handleResumeGame} className="flex items-center gap-2">
-              <PlayCircle className="w-4 h-4" />
-              Resume
-            </Button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Group and Player Selection */}
-      <Card>
-        <CardHeader>
-          <CardTitle>My Groups</CardTitle>
-          <CardDescription>Select a group to enter scores</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {myGroups.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">
-              You are not assigned to any groups yet. Please contact the admin.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="group-select">Select Group</Label>
-                <Select
-                  value={selectedGroupId}
-                  onValueChange={(value) => {
-                    setSelectedGroupId(value)
-                    setSelectedPlayerId("") // Reset player selection when group changes
-                  }}
-                >
-                  <SelectTrigger id="group-select">
-                    <SelectValue placeholder="Choose a group" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {myGroups.map((group) => {
-                      const courseName = courses.find((c) => c.id === group.courseId)?.name || "Unknown"
-                      return (
-                        <SelectItem key={group.id} value={group.id}>
-                          {group.name} - {courseName} ({new Date(group.date).toLocaleDateString()}) - Day {group.day}
-                        </SelectItem>
-                      )
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedGroup && (
+        {/* Group and Player Selection */}
+        <Card>
+          <CardHeader>
+            <CardTitle>My Groups</CardTitle>
+            <CardDescription>Select a group to enter scores</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {myGroups.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">
+                You are not assigned to any groups yet. Please contact the admin.
+              </p>
+            ) : (
+              <div className="space-y-4">
                 <div>
-                  <Label htmlFor="player-select">Select Player to Score</Label>
+                  <Label htmlFor="group-select">Select Group</Label>
                   <Select
-                    value={selectedPlayerId}
+                    value={selectedGroupId}
                     onValueChange={(value) => {
-                      setSelectedPlayerId(value)
-                      if (value) {
-                        const player = players.find((p) => p.id === value)
-                        if (player) {
-                          setCurrentHole(1)
-                        }
-                      }
+                      setSelectedGroupId(value)
+                      setSelectedPlayerId("") // Reset player selection when group changes
                     }}
                   >
-                    <SelectTrigger id="player-select">
-                      <SelectValue placeholder="Choose a player" />
+                    <SelectTrigger id="group-select">
+                      <SelectValue placeholder="Choose a group" />
                     </SelectTrigger>
                     <SelectContent>
-                      {groupPlayers.map((player) => (
-                        <SelectItem key={player.id} value={player.id}>
-                          {player.name} (Handicap: {player.handicap}) - {getPlayerRoundStatus(player.id)}
-                        </SelectItem>
-                      ))}
+                      {myGroups.map((group) => {
+                        const courseName = courses.find((c) => c.id === group.courseId)?.name || "Unknown"
+                        return (
+                          <SelectItem key={group.id} value={group.id}>
+                            {group.name} - {courseName} ({new Date(group.date).toLocaleDateString()}) - Day {group.day}
+                          </SelectItem>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
-              )}
 
-              {selectedGroup && (
-                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Users className="w-4 h-4 text-emerald-700" />
-                    <p className="font-medium text-emerald-900">Players in this group:</p>
-                  </div>
-                  <div className="space-y-1">
-                    {groupPlayers.map((player) => (
-                      <div key={player.id} className="flex items-center justify-between text-sm">
-                        <span className="text-emerald-800">
-                          {player.name} (Handicap: {player.handicap})
-                        </span>
-                        <span className="text-emerald-600 font-medium">{getPlayerRoundStatus(player.id)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Scorecard */}
-      {selectedGroup && course && selectedPlayerId && player && currentHoleData ? (
-        <div className="fixed inset-0 bg-emerald-900 flex flex-col z-50">
-          {/* Top Info Bar */}
-          <div className="flex-shrink-0 bg-emerald-900 p-2">
-            <div className="flex items-center justify-between mb-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleExitScorecard}
-                className="text-white hover:bg-emerald-800 h-7 px-2 text-xs"
-              >
-                <ChevronLeft className="w-3 h-3 mr-1" />
-                Back
-              </Button>
-              <Button variant="ghost" size="sm" className="text-white hover:bg-emerald-800 h-7 px-2 text-xs">
-                Menu
-                <Menu className="w-3 h-3 ml-1" />
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-3 gap-1.5">
-              <div className="border border-emerald-700 rounded p-1.5 bg-emerald-800/30">
-                <div className="text-[9px] text-emerald-300 mb-0.5">ROUND TIME</div>
-                <div className="text-xs font-bold text-white">{roundTimer}</div>
-              </div>
-              <div className="border border-emerald-700 rounded p-1.5 bg-emerald-800/30">
-                <div className="text-[9px] text-emerald-300 mb-0.5">HOLE</div>
-                <div className="text-2xl font-bold text-white text-center leading-none">{currentHole}</div>
-              </div>
-              <div className="border border-emerald-700 rounded p-1.5 bg-emerald-800/30">
-                <div className="text-[9px] text-emerald-300 mb-0.5">TO MID</div>
-                <div className="text-xs font-bold text-white">{currentHoleData.distance || "N/A"}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Scrollable Player Cards */}
-          <div className="flex-1 p-2 space-y-2 overflow-hidden">
-            {/* Player Being Scored */}
-            <div className="bg-white rounded-lg overflow-hidden shadow-md">
-              <div className="bg-emerald-600 px-3 py-1.5">
-                <h2 className="text-sm font-bold text-white text-center">
-                  {player.name} (HC: {player.handicap})
-                </h2>
-              </div>
-
-              <div className="bg-white p-3">
-                <div className="flex items-center justify-center gap-3 mb-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-12 w-12 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 p-0"
-                    onClick={() => {
-                      console.log("[v0] Minus button clicked:", {
-                        isLocked,
-                        currentHole,
-                        currentStrokes: holeScores[currentHole],
-                        roundStatus: existingRound,
-                      })
-                      const currentStrokes = Number.parseInt(holeScores[currentHole] || "0")
-                      if (currentStrokes > 0) {
-                        updateHoleScore(currentHole, String(currentStrokes - 1))
-                      }
-                    }}
-                    disabled={isLocked}
-                  >
-                    <Minus className="w-6 h-6 text-slate-700" />
-                  </Button>
-
-                  <div className="text-center min-w-[60px]">
-                    <div className="text-4xl font-bold text-slate-900 leading-none">
-                      {holeScores[currentHole] || "0"}
-                    </div>
-                    <div className="text-[10px] font-semibold text-slate-600 mt-1">
-                      {calculateCurrentHolePoints()} pts
-                    </div>
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-12 w-12 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 p-0"
-                    onClick={() => {
-                      console.log("[v0] Plus button clicked:", {
-                        isLocked,
-                        currentHole,
-                        currentStrokes: holeScores[currentHole],
-                      })
-                      const currentStrokes = Number.parseInt(holeScores[currentHole] || "0")
-                      updateHoleScore(currentHole, String(currentStrokes + 1))
-                    }}
-                    disabled={isLocked}
-                  >
-                    <Plus className="w-6 h-6 text-slate-700" />
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-4 gap-1.5">
-                  <div className="text-center">
-                    <div className="text-[9px] text-slate-500 font-semibold mb-0.5">PAR</div>
-                    <div className="bg-emerald-600 text-white text-base font-bold py-1.5 rounded">
-                      {currentHoleData.par}
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-[9px] text-slate-500 font-semibold mb-0.5">SHOTS</div>
-                    <div className="border border-slate-300 text-slate-900 text-base font-bold py-1.5 rounded bg-white">
-                      {playerHandicapStrokes}
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-[9px] text-slate-500 font-semibold mb-0.5">PICKUP</div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className={`w-full text-base font-bold py-1.5 rounded ${
-                        pickedUpHoles[currentHole]
-                          ? "bg-red-500 text-white border-red-500"
-                          : "border-slate-300 text-slate-900 bg-white hover:bg-slate-50"
-                      }`}
-                      onClick={() => markHoleAsPickedUp(currentHole)}
-                      disabled={isLocked}
+                {selectedGroup && (
+                  <div>
+                    <Label htmlFor="player-select">Select Player to Score</Label>
+                    <Select
+                      value={selectedPlayerId}
+                      onValueChange={(value) => {
+                        setSelectedPlayerId(value)
+                        if (value) {
+                          const player = players.find((p) => p.id === value)
+                          if (player) {
+                            setCurrentHole(1)
+                          }
+                        }
+                      }}
                     >
-                      P
-                    </Button>
+                      <SelectTrigger id="player-select">
+                        <SelectValue placeholder="Choose a player" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {groupPlayers.map((player) => (
+                          <SelectItem key={player.id} value={player.id}>
+                            {player.name} (Handicap: {player.handicap}) - {getPlayerRoundStatus(player.id)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="text-center">
-                    <div className="text-[9px] text-slate-500 font-semibold mb-0.5">TOTAL</div>
-                    <div className="border border-slate-300 text-slate-900 text-base font-bold py-1.5 rounded bg-white">
-                      {totalGross}
+                )}
+
+                {selectedGroup && (
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Users className="w-4 h-4 text-emerald-700" />
+                      <p className="font-medium text-emerald-900">Players in this group:</p>
+                    </div>
+                    <div className="space-y-1">
+                      {groupPlayers.map((player) => (
+                        <div key={player.id} className="flex items-center justify-between text-sm">
+                          <span className="text-emerald-800">
+                            {player.name} (Handicap: {player.handicap})
+                          </span>
+                          <span className="text-emerald-600 font-medium">{getPlayerRoundStatus(player.id)}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Scorecard */}
+        {selectedGroup && course && selectedPlayerId && player && currentHoleData ? (
+          <div className="fixed inset-0 bg-emerald-900 flex flex-col z-50">
+            {/* Top Info Bar */}
+            <div className="flex-shrink-0 bg-emerald-900 p-2">
+              <div className="flex items-center justify-between mb-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleExitScorecard}
+                  className="text-white hover:bg-emerald-800 h-7 px-2 text-xs"
+                >
+                  <ChevronLeft className="w-3 h-3 mr-1" />
+                  Back
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowLeaderboard(true)}
+                  className="text-white hover:bg-emerald-800 h-7 px-2 text-xs"
+                >
+                  <Trophy className="w-3 h-3 mr-1" />
+                  Leaderboard
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5">
+                <div className="border border-emerald-700 rounded p-1.5 bg-emerald-800/30">
+                  <div className="text-[9px] text-emerald-300 mb-0.5">ROUND TIME</div>
+                  <div className="text-xs font-bold text-white">{roundTimer}</div>
+                </div>
+                <div className="border border-emerald-700 rounded p-1.5 bg-emerald-800/30">
+                  <div className="text-[9px] text-emerald-300 mb-0.5">HOLE</div>
+                  <div className="text-2xl font-bold text-white text-center leading-none">{currentHole}</div>
+                </div>
+                <div className="border border-emerald-700 rounded p-1.5 bg-emerald-800/30">
+                  <div className="text-[9px] text-emerald-300 mb-0.5">POINTS</div>
+                  <div className="text-2xl font-bold text-white text-center leading-none">{totalPoints}</div>
                 </div>
               </div>
             </div>
 
-            {/* Reference Score (Current User) */}
-            {!isScoringYourself && showReferenceScore && (
+            {/* Scrollable Player Cards */}
+            <div className="flex-1 p-2 space-y-2 overflow-hidden">
+              {/* Player Being Scored */}
               <div className="bg-white rounded-lg overflow-hidden shadow-md">
                 <div className="bg-emerald-600 px-3 py-1.5">
                   <h2 className="text-sm font-bold text-white text-center">
-                    {currentUser.name} (HC: {currentUser.handicap})
+                    {player.name} (HC: {player.handicap})
                   </h2>
                 </div>
 
@@ -1283,28 +1322,28 @@ export function PlayerScoreEntry({
                       size="sm"
                       className="h-12 w-12 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 p-0"
                       onClick={() => {
-                        console.log("[v0] Reference minus clicked:", {
+                        console.log("[v0] Minus button clicked:", {
+                          isLocked,
                           currentHole,
-                          current: referenceScores[currentHole],
+                          currentStrokes: holeScores[currentHole],
+                          roundStatus: existingRound,
                         })
-                        const current = referenceScores[currentHole] || 0
-                        if (current > 0) {
-                          setReferenceScores((prev) => ({
-                            ...prev,
-                            [currentHole]: current - 1,
-                          }))
+                        const currentStrokes = Number.parseInt(holeScores[currentHole] || "0")
+                        if (currentStrokes > 0) {
+                          updateHoleScore(currentHole, String(currentStrokes - 1))
                         }
                       }}
+                      disabled={isLocked}
                     >
                       <Minus className="w-6 h-6 text-slate-700" />
                     </Button>
 
                     <div className="text-center min-w-[60px]">
                       <div className="text-4xl font-bold text-slate-900 leading-none">
-                        {referenceScores[currentHole] || "0"}
+                        {holeScores[currentHole] || "0"}
                       </div>
                       <div className="text-[10px] font-semibold text-slate-600 mt-1">
-                        {calculateReferenceHolePoints()} pts
+                        {calculateCurrentHolePoints()} pts
                       </div>
                     </div>
 
@@ -1314,16 +1353,15 @@ export function PlayerScoreEntry({
                       size="sm"
                       className="h-12 w-12 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 p-0"
                       onClick={() => {
-                        console.log("[v0] Reference plus clicked:", {
+                        console.log("[v0] Plus button clicked:", {
+                          isLocked,
                           currentHole,
-                          current: referenceScores[currentHole],
+                          currentStrokes: holeScores[currentHole],
                         })
-                        const current = referenceScores[currentHole] || 0
-                        setReferenceScores((prev) => ({
-                          ...prev,
-                          [currentHole]: current + 1,
-                        }))
+                        const currentStrokes = Number.parseInt(holeScores[currentHole] || "0")
+                        updateHoleScore(currentHole, String(currentStrokes + 1))
                       }}
+                      disabled={isLocked}
                     >
                       <Plus className="w-6 h-6 text-slate-700" />
                     </Button>
@@ -1339,7 +1377,7 @@ export function PlayerScoreEntry({
                     <div className="text-center">
                       <div className="text-[9px] text-slate-500 font-semibold mb-0.5">SHOTS</div>
                       <div className="border border-slate-300 text-slate-900 text-base font-bold py-1.5 rounded bg-white">
-                        {currentUserHandicapStrokes}
+                        {playerHandicapStrokes}
                       </div>
                     </div>
                     <div className="text-center">
@@ -1349,11 +1387,12 @@ export function PlayerScoreEntry({
                         variant="outline"
                         size="sm"
                         className={`w-full text-base font-bold py-1.5 rounded ${
-                          referencePickedUpHoles[currentHole]
+                          pickedUpHoles[currentHole]
                             ? "bg-red-500 text-white border-red-500"
                             : "border-slate-300 text-slate-900 bg-white hover:bg-slate-50"
                         }`}
-                        onClick={() => markReferenceHoleAsPickedUp(currentHole)}
+                        onClick={() => markHoleAsPickedUp(currentHole)}
+                        disabled={isLocked}
                       >
                         P
                       </Button>
@@ -1361,63 +1400,223 @@ export function PlayerScoreEntry({
                     <div className="text-center">
                       <div className="text-[9px] text-slate-500 font-semibold mb-0.5">TOTAL</div>
                       <div className="border border-slate-300 text-slate-900 text-base font-bold py-1.5 rounded bg-white">
-                        {referenceTotal.strokes}
+                        {totalGross}
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* Bottom Navigation */}
-          <div className="flex-shrink-0 bg-emerald-900 p-2 border-t border-emerald-800">
-            <div className="flex items-center justify-between gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={goToPreviousHole}
-                disabled={currentHole === 1}
-                className="flex-1 bg-emerald-800 border-emerald-700 text-white hover:bg-emerald-700 h-12 text-sm"
-              >
-                <ChevronLeft className="w-4 h-4 mr-1" />
-                Prev
-              </Button>
+              {/* Reference Score (Current User) */}
+              {!isScoringYourself && showReferenceScore && (
+                <div className="bg-white rounded-lg overflow-hidden shadow-md">
+                  <div className="bg-emerald-600 px-3 py-1.5">
+                    <h2 className="text-sm font-bold text-white text-center">
+                      {currentUser.name} (HC: {currentUser.handicap})
+                    </h2>
+                  </div>
 
-              <div className="text-center px-2">
-                <div className="text-[9px] text-emerald-300">Hole</div>
-                <div className="text-sm font-bold text-white leading-none">
-                  {currentHole}/{course.holes.length}
+                  <div className="bg-white p-3">
+                    <div className="flex items-center justify-center gap-3 mb-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-12 w-12 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 p-0"
+                        onClick={() => {
+                          console.log("[v0] Reference minus clicked:", {
+                            currentHole,
+                            current: referenceScores[currentHole],
+                          })
+                          const current = referenceScores[currentHole] || 0
+                          if (current > 0) {
+                            setReferenceScores((prev) => ({
+                              ...prev,
+                              [currentHole]: current - 1,
+                            }))
+                          }
+                        }}
+                      >
+                        <Minus className="w-6 h-6 text-slate-700" />
+                      </Button>
+
+                      <div className="text-center min-w-[60px]">
+                        <div className="text-4xl font-bold text-slate-900 leading-none">
+                          {referenceScores[currentHole] || "0"}
+                        </div>
+                        <div className="text-[10px] font-semibold text-slate-600 mt-1">
+                          {calculateReferenceHolePoints()} pts
+                        </div>
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-12 w-12 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 p-0"
+                        onClick={() => {
+                          console.log("[v0] Reference plus clicked:", {
+                            currentHole,
+                            current: referenceScores[currentHole],
+                          })
+                          const current = referenceScores[currentHole] || 0
+                          setReferenceScores((prev) => ({
+                            ...prev,
+                            [currentHole]: current + 1,
+                          }))
+                        }}
+                      >
+                        <Plus className="w-6 h-6 text-slate-700" />
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-1.5">
+                      <div className="text-center">
+                        <div className="text-[9px] text-slate-500 font-semibold mb-0.5">PAR</div>
+                        <div className="bg-emerald-600 text-white text-base font-bold py-1.5 rounded">
+                          {currentHoleData.par}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-[9px] text-slate-500 font-semibold mb-0.5">SHOTS</div>
+                        <div className="border border-slate-300 text-slate-900 text-base font-bold py-1.5 rounded bg-white">
+                          {currentUserHandicapStrokes}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-[9px] text-slate-500 font-semibold mb-0.5">PICKUP</div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={`w-full text-base font-bold py-1.5 rounded ${
+                            referencePickedUpHoles[currentHole]
+                              ? "bg-red-500 text-white border-red-500"
+                              : "border-slate-300 text-slate-900 bg-white hover:bg-slate-50"
+                          }`}
+                          onClick={() => markReferenceHoleAsPickedUp(currentHole)}
+                        >
+                          P
+                        </Button>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-[9px] text-slate-500 font-semibold mb-0.5">TOTAL</div>
+                        <div className="border border-slate-300 text-slate-900 text-base font-bold py-1.5 rounded bg-white">
+                          {referenceTotal.strokes}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-[9px] text-emerald-300 mt-0.5">
-                  S: {totalGross} | P: {totalPoints}
+              )}
+            </div>
+
+            {/* Bottom Navigation */}
+            <div className="flex-shrink-0 bg-emerald-900 p-2 border-t border-emerald-800">
+              <div className="flex items-center justify-between gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={goToPreviousHole}
+                  disabled={currentHole === 1}
+                  className="flex-1 bg-emerald-800 border-emerald-700 text-white hover:bg-emerald-700 h-12 text-sm"
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Prev
+                </Button>
+
+                <div className="text-center px-2">
+                  <div className="text-[9px] text-emerald-300">Hole</div>
+                  <div className="text-sm font-bold text-white leading-none">
+                    {currentHole}/{course.holes.length}
+                  </div>
+                  <div className="text-[9px] text-emerald-300 mt-0.5">
+                    S: {totalGross} | P: {totalPoints}
+                  </div>
                 </div>
+
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={currentHole === course.holes.length ? handleSubmit : goToNextHole}
+                  disabled={currentHole === course.holes.length ? false : currentHole >= course.holes.length}
+                  className="flex-1 bg-amber-500 text-emerald-900 hover:bg-amber-400 font-bold h-12 text-sm"
+                >
+                  {currentHole === course.holes.length ? "Finish" : "Next"}
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
               </div>
-
-              <Button
-                variant="default"
-                size="sm"
-                onClick={currentHole === course.holes.length ? handleSubmit : goToNextHole}
-                disabled={currentHole === course.holes.length ? false : currentHole >= course.holes.length}
-                className="flex-1 bg-amber-500 text-emerald-900 hover:bg-amber-400 font-bold h-12 text-sm"
-              >
-                {currentHole === course.holes.length ? "Finish" : "Next"}
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
             </div>
           </div>
-        </div>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Scorecard</CardTitle>
-            <CardDescription>Select a group and player to begin scoring</CardDescription>
-          </CardHeader>
-          <CardContent className="py-10 text-center text-muted-foreground">
-            Please select a group and a player to start scoring.
-          </CardContent>
-        </Card>
-      )}
-    </div>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Scorecard</CardTitle>
+              <CardDescription>Select a group and player to begin scoring</CardDescription>
+            </CardHeader>
+            <CardContent className="py-10 text-center text-muted-foreground">
+              Please select a group and a player to start scoring.
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Leaderboard Modal */}
+        <Dialog open={showLeaderboard} onOpenChange={setShowLeaderboard}>
+          <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Leaderboard</DialogTitle>
+            </DialogHeader>
+            <PlayerLeaderboard
+              tournamentId={currentUser.tournamentId!}
+              currentUserId={currentUser.id}
+              players={players}
+              competitionEntries={competitionEntries}
+              rounds={rounds}
+              groups={groups}
+              tournament={tournament}
+            />
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showDiscrepancyDialog} onOpenChange={setShowDiscrepancyDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-red-600">Score Discrepancies Found!</DialogTitle>
+              <DialogDescription>
+                Your reference scores don't match the official scores entered by your partner. Please review:
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-4">
+              {scoreDiscrepancies.map((disc) => (
+                <div
+                  key={disc.hole}
+                  className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200"
+                >
+                  <span className="font-semibold">Hole {disc.hole}</span>
+                  <div className="flex gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Official: </span>
+                      <span className="font-bold text-red-600">{disc.official}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Your tracking: </span>
+                      <span className="font-bold text-blue-600">{disc.reference}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <DialogFooter className="flex gap-2">
+              <Button variant="outline" onClick={() => setShowDiscrepancyDialog(false)} className="flex-1">
+                Review Scores
+              </Button>
+              <Button onClick={proceedWithSubmission} className="flex-1 bg-emerald-600 hover:bg-emerald-700">
+                Submit Anyway
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </>
   )
 }

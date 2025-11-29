@@ -186,7 +186,8 @@ export function PlayerProfileModal({
                                   <th className="text-left py-2 px-2">Hole</th>
                                   <th className="text-center py-2 px-2">Par</th>
                                   <th className="text-center py-2 px-2">SI</th>
-                                  <th className="text-center py-2 px-2">Strokes</th>
+                                  <th className="text-center py-2 px-2">Gross</th>
+                                  <th className="text-center py-2 px-2">Shots</th>
                                   {round.referenceScores && Object.keys(round.referenceScores).length > 0 && (
                                     <th className="text-center py-2 px-2 text-blue-600">Their Score</th>
                                   )}
@@ -219,6 +220,7 @@ export function PlayerProfileModal({
                                       >
                                         {hole.strokes || 0}
                                       </td>
+                                      <td className="text-center py-2 px-2 text-muted-foreground">{handicapStrokes}</td>
                                       {round.referenceScores && Object.keys(round.referenceScores).length > 0 && (
                                         <td
                                           className={`text-center py-2 px-2 ${hasDiff ? "text-blue-600 font-semibold" : "text-muted-foreground"}`}
@@ -240,6 +242,20 @@ export function PlayerProfileModal({
                                   </td>
                                   <td className="text-center py-2 px-2">-</td>
                                   <td className="text-center py-2 px-2">{round.totalGross || 0}</td>
+                                  <td className="text-center py-2 px-2 text-muted-foreground">
+                                    {round.holes.reduce((sum, hole) => {
+                                      const courseHole = course.holes.find((h) => h.holeNumber === hole.holeNumber)
+                                      const handicapUsed = round.handicapUsed || player.handicap
+                                      const handicapStrokes = courseHole
+                                        ? getHandicapStrokesForHole(
+                                            courseHole.strokeIndex || 18,
+                                            handicapUsed,
+                                            course.holes.length,
+                                          )
+                                        : 0
+                                      return sum + handicapStrokes
+                                    }, 0)}
+                                  </td>
                                   {round.referenceScores && Object.keys(round.referenceScores).length > 0 && (
                                     <td className="text-center py-2 px-2 text-blue-600">
                                       {Object.values(round.referenceScores).reduce((sum, score) => sum + score, 0)}

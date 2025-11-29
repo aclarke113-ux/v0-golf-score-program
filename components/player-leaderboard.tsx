@@ -73,27 +73,7 @@ export function PlayerLeaderboard({
   const numberOfDays = tournament?.numberOfDays || 2
   const hasPlayAroundDay = tournament?.hasPlayAroundDay || false
 
-  const shouldBlurTop5 = useMemo(() => {
-    try {
-      const day2Groups = safeGroups.filter((g) => g?.day === 2)
-      if (day2Groups.length === 0) return false
-
-      for (const group of day2Groups) {
-        const groupRounds = safeRounds.filter((r) => r?.groupId === group.id && r?.submitted)
-        if (groupRounds.length > 0) {
-          const allComplete = groupRounds.every((round) => {
-            const scores = round?.scores || []
-            return scores.length === 18 && scores.every((s) => s > 0)
-          })
-          if (allComplete) return true
-        }
-      }
-      return false
-    } catch (error) {
-      console.error("[v0] Error in shouldBlurTop5:", error)
-      return false
-    }
-  }, [safeGroups, safeRounds])
+  const shouldBlurTop5 = tournament?.blurTop5 || false
 
   const filteredRounds = useMemo(() => {
     try {
@@ -191,7 +171,7 @@ export function PlayerLeaderboard({
           const course = group ? safeCourses.find((c) => c.id === group.courseId) : null
           const handicapUsed = round.handicapUsed || player.handicap
 
-          const scoredHoles = round.holes.filter((h) => h.strokes > 0)
+          const scoredHoles = round.holes.filter((h) => h.strokes >= 0 && (h.strokes > 0 || h.points > 0))
           totalHolesPlayed += scoredHoles.length
           totalStrokes += scoredHoles.reduce((sum, hole) => sum + hole.strokes, 0)
           totalPoints += scoredHoles.reduce((sum, hole) => sum + hole.points, 0)
@@ -210,7 +190,7 @@ export function PlayerLeaderboard({
             }
           })
 
-          if (round.completed || round.submitted) {
+          if (round.completed || round.submitted || scoredHoles.length > 0) {
             hasCompletedRound = true
           }
         })
@@ -334,21 +314,21 @@ export function PlayerLeaderboard({
               return (
                 <div
                   key={playerStats.playerId}
-                  onClick={() => fullPlayer && setSelectedPlayer(fullPlayer)}
-                  className={`flex items-center gap-4 p-4 border rounded-lg transition-colors cursor-pointer ${
+                  onClick={() => !shouldBlur && fullPlayer && setSelectedPlayer(fullPlayer)}
+                  className={`flex items-center gap-4 p-4 border rounded-lg transition-colors ${
+                    shouldBlur ? "cursor-not-allowed" : "cursor-pointer hover:bg-accent/50"
+                  } ${
                     index < 3 && !shouldBlur && playerStats.holesPlayed > 0
                       ? "bg-emerald-50 border-emerald-200"
                       : "bg-card"
-                  } ${shouldBlur ? "relative" : ""} hover:bg-accent/50 ${
-                    playerStats.holesPlayed === 0 ? "opacity-60" : ""
-                  }`}
+                  } ${shouldBlur ? "relative" : ""} ${playerStats.holesPlayed === 0 ? "opacity-60" : ""}`}
                 >
                   {shouldBlur && (
-                    <div className="absolute inset-0 backdrop-blur-md bg-white/30 rounded-lg flex items-center justify-center z-10">
+                    <div className="absolute inset-0 bg-gradient-to-br from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 rounded-lg flex items-center justify-center z-10 pointer-events-none">
                       <div className="text-center">
-                        <Eye className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                        <p className="text-sm font-medium text-muted-foreground">Top {index + 1}</p>
-                        <p className="text-xs text-muted-foreground">Hidden until reveal</p>
+                        <Eye className="w-8 h-8 text-gray-600 dark:text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Top {index + 1}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">Hidden until reveal</p>
                       </div>
                     </div>
                   )}

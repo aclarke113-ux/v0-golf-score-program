@@ -37,6 +37,7 @@ const transformTournament = (dbTournament: any): Tournament => ({
   allowSpectatorFeed: dbTournament.allow_spectator_feed ?? true,
   allowSpectatorBetting: dbTournament.allow_spectator_betting ?? true,
   infiniteBetting: dbTournament.infinite_betting ?? false,
+  blurTop5: dbTournament.blur_top_5 ?? false,
   createdAt: dbTournament.created_at,
   updatedAt: dbTournament.updated_at,
 })
@@ -233,6 +234,9 @@ export async function createTournament(tournament: Omit<Tournament, "id" | "crea
   if (tournament.infiniteBetting !== undefined) {
     insertData.infinite_betting = tournament.infiniteBetting
   }
+  if (tournament.blurTop5 !== undefined) {
+    insertData.blur_top_5 = tournament.blurTop5
+  }
 
   const { data, error } = await supabase.from("tournaments").insert(insertData).select().single()
 
@@ -272,6 +276,7 @@ export async function updateTournament(id: string, updates: Partial<Tournament>)
   if (updates.allowSpectatorFeed !== undefined) updateData.allow_spectator_feed = updates.allowSpectatorFeed
   if (updates.allowSpectatorBetting !== undefined) updateData.allow_spectator_betting = updates.allowSpectatorBetting
   if (updates.infiniteBetting !== undefined) updateData.infinite_betting = updates.infiniteBetting
+  if (updates.blurTop5 !== undefined) updateData.blur_top_5 = updates.blurTop5
 
   if (Object.keys(updateData).length === 0) {
     console.log("[v0] No fields to update, returning existing tournament")

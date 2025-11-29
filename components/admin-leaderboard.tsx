@@ -3,7 +3,8 @@
 import { useMemo, useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Trophy, Medal, Award } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Trophy, Medal, Award, Eye, EyeOff } from "lucide-react"
 import type { Player, Course, Group, Round, Tournament } from "@/app/page"
 import { subscribeToRounds, unsubscribe } from "@/lib/supabase/realtime"
 import { PlayerProfileModal } from "@/components/player-profile-modal"
@@ -51,6 +52,8 @@ export function AdminLeaderboard({
   const [sortBy, setSortBy] = useState<"totalPoints" | "avgPoints" | "bestRound">("totalPoints")
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
+  const [blurTop5, setBlurTop5] = useState(tournament?.blurTop5 || false)
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     if (!tournamentId) return
@@ -63,6 +66,10 @@ export function AdminLeaderboard({
       unsubscribe(roundsChannel)
     }
   }, [tournamentId])
+
+  useEffect(() => {
+    setBlurTop5(tournament?.blurTop5 || false)
+  }, [tournament?.blurTop5])
 
   const filteredRounds = useMemo(() => {
     const completedRounds = rounds.filter((r) => {
@@ -185,12 +192,58 @@ export function AdminLeaderboard({
     }
   }, [groups, tournament?.hasPlayAroundDay])
 
+  const toggleBlurTop5 = async () => {
+    if (!tournamentId || isSaving) return
+
+    const newBlurValue = !blurTop5
+    setBlurTop5(newBlurValue)
+    setIsSaving(true)
+
+    try {
+      console.log("[v0] Updating blur_top_5 in database:", newBlurValue)
+      const response = await fetch("/api/tournaments/update-blur", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tournamentId,
+          blurTop5: newBlurValue,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to update blur setting")
+      }
+
+      console.log("[v0] Successfully updated blur_top_5")
+    } catch (error) {
+      console.error("[v0] Error updating blur setting:", error)
+      // Revert on error
+      setBlurTop5(!newBlurValue)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Leaderboard</CardTitle>
-          <CardDescription>View player rankings based on Stableford points</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Leaderboard</CardTitle>
+              <CardDescription>View player rankings based on Stableford points</CardDescription>
+            </div>
+            <Button
+              variant={blurTop5 ? "default" : "outline"}
+              size="sm"
+              onClick={toggleBlurTop5}
+              disabled={isSaving}
+              className="gap-2"
+            >
+              {blurTop5 ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {isSaving ? "Updating..." : blurTop5 ? "Show Top 5" : "Hide Top 5"}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -257,7 +310,7 @@ export function AdminLeaderboard({
                   }}
                   className={`flex items-center gap-4 p-4 border rounded-lg transition-colors cursor-pointer ${
                     index < 3 ? "bg-emerald-50 border-emerald-200" : "bg-card hover:bg-accent/50"
-                  }`}
+                  } ${blurTop5 && index < 5 ? "blur-md select-none" : ""}`}
                 >
                   <div className="flex items-center justify-center w-8">
                     {getPositionIcon(index) || (
