@@ -73,7 +73,13 @@ export function PlayerLeaderboard({
   const numberOfDays = tournament?.numberOfDays || 2
   const hasPlayAroundDay = tournament?.hasPlayAroundDay || false
 
-  const shouldBlurTop5 = tournament?.blurTop5 || false
+  const shouldBlurTop5 = !isAdmin && (tournament?.blurTop5 || false)
+
+  console.log("[v0] Player Leaderboard blur settings:", {
+    isAdmin,
+    tournamentBlurTop5: tournament?.blurTop5,
+    shouldBlurTop5,
+  })
 
   const filteredRounds = useMemo(() => {
     try {
@@ -299,7 +305,7 @@ export function PlayerLeaderboard({
             <div className="flex-none mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-3">
               <EyeOff className="w-5 h-5 text-amber-600" />
               <p className="text-sm text-amber-800">
-                <strong>Competition Sealed!</strong> The top 5 positions are now hidden until the admin reveals the
+                <strong>Competition Sealed!</strong> The top 3 positions are now hidden until the admin reveals the
                 winners.
               </p>
             </div>
@@ -307,8 +313,8 @@ export function PlayerLeaderboard({
 
           <div className="flex-1 overflow-y-auto space-y-2 pr-2">
             {leaderboard.map((playerStats, index) => {
-              const isTop5 = index < 5
-              const shouldBlur = isTop5 && shouldBlurTop5
+              const isTop3 = index < 3
+              const shouldBlur = isTop3 && shouldBlurTop5
               const fullPlayer = safePlayers.find((p) => p.id === playerStats.playerId)
 
               return (

@@ -87,6 +87,9 @@ export function AdminLeaderboard({
         const dayGroups = groups.filter((g) => g.day === dayNumber).map((g) => g.id)
         dayFilteredRounds = completedRounds.filter((r) => dayGroups.includes(r.groupId))
       }
+    } else {
+      const tournamentGroups = groups.filter((g) => g.day > 0).map((g) => g.id)
+      dayFilteredRounds = completedRounds.filter((r) => tournamentGroups.includes(r.groupId))
     }
 
     if (selectedGroupId === "all") return dayFilteredRounds
@@ -241,7 +244,7 @@ export function AdminLeaderboard({
               className="gap-2"
             >
               {blurTop5 ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              {isSaving ? "Updating..." : blurTop5 ? "Show Top 5" : "Hide Top 5"}
+              {isSaving ? "Updating..." : blurTop5 ? "Show Top 3" : "Hide Top 3"}
             </Button>
           </div>
         </CardHeader>
@@ -254,7 +257,7 @@ export function AdminLeaderboard({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Days</SelectItem>
+                  <SelectItem value="all">All Tournament Days</SelectItem>
                   {hasPlayAroundDay && <SelectItem value="practice">Practice Match</SelectItem>}
                   {availableDays.map((day) => (
                     <SelectItem key={day} value={day.toString()}>
@@ -310,7 +313,7 @@ export function AdminLeaderboard({
                   }}
                   className={`flex items-center gap-4 p-4 border rounded-lg transition-colors cursor-pointer ${
                     index < 3 ? "bg-emerald-50 border-emerald-200" : "bg-card hover:bg-accent/50"
-                  } ${blurTop5 && index < 5 ? "blur-md select-none" : ""}`}
+                  }`}
                 >
                   <div className="flex items-center justify-center w-8">
                     {getPositionIcon(index) || (
