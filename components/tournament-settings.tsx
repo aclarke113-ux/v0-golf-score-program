@@ -215,6 +215,35 @@ export function TournamentSettings({
               </Select>
             </div>
 
+            <div>
+              <Label htmlFor="starting-hole" className="flex items-center gap-2">
+                <Target className="w-4 h-4" />
+                Default Starting Hole
+              </Label>
+              <Select
+                value={localTournament.startingHole?.toString() || "1"}
+                onValueChange={(value) => {
+                  console.log("[v0] Changing starting hole to:", value)
+                  handleUpdateTournamentSettings({ startingHole: Number.parseInt(value) })
+                }}
+                disabled={loading}
+              >
+                <SelectTrigger id="starting-hole">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 18 }, (_, i) => i + 1).map((hole) => (
+                    <SelectItem key={hole} value={hole.toString()}>
+                      Hole {hole}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-2">
+                For shotgun starts, select which hole players begin on (e.g., start on hole 10, finish on hole 9)
+              </p>
+            </div>
+
             <div
               className="flex items-start space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
               onClick={() =>
