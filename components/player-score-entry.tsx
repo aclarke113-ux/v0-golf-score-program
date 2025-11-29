@@ -1378,9 +1378,9 @@ export function PlayerScoreEntry({
                 size="sm"
                 onClick={goToPreviousHole}
                 disabled={currentHole === 1}
-                className="flex-1 bg-emerald-800 border-emerald-700 text-white hover:bg-emerald-700 h-9 text-xs"
+                className="flex-1 bg-emerald-800 border-emerald-700 text-white hover:bg-emerald-700 h-12 text-sm"
               >
-                <ChevronLeft className="w-3 h-3 mr-1" />
+                <ChevronLeft className="w-4 h-4 mr-1" />
                 Prev
               </Button>
 
@@ -1399,10 +1399,10 @@ export function PlayerScoreEntry({
                 size="sm"
                 onClick={currentHole === course.holes.length ? handleSubmit : goToNextHole}
                 disabled={currentHole === course.holes.length ? false : currentHole >= course.holes.length}
-                className="flex-1 bg-amber-500 text-emerald-900 hover:bg-amber-400 font-bold h-9 text-xs"
+                className="flex-1 bg-amber-500 text-emerald-900 hover:bg-amber-400 font-bold h-12 text-sm"
               >
                 {currentHole === course.holes.length ? "Finish" : "Next"}
-                <ChevronRight className="w-3 h-3 ml-1" />
+                <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
           </div>
