@@ -707,36 +707,38 @@ export function PlayerScoreEntry({
   const player = players.find((p) => p.id === selectedPlayerId)
 
   const activeCompetitions = useMemo(() => {
+    console.log("[v0] Competition filtering DEBUG:", {
+      currentHole,
+      selectedGroupDay: selectedGroup?.day,
+      competitionsCount: competitions.length,
+      competitions: competitions.map((c) => ({
+        id: c.id,
+        type: c.type,
+        holeNumber: c.holeNumber,
+        day: c.day,
+        enabled: c.enabled,
+        matchesHole: c.holeNumber === currentHole,
+        matchesDay: c.day === selectedGroup?.day,
+        isEnabled: c.enabled,
+        passesFilter: c.holeNumber === currentHole && c.enabled && c.day === selectedGroup?.day,
+      })),
+    })
+
     const filtered = competitions.filter(
       (c) => c.holeNumber === currentHole && c.enabled && c.day === selectedGroup?.day,
     )
 
-    console.log("[v0] Competition filtering:", {
-      currentHole,
-      selectedGroupDay: selectedGroup?.day,
-      allCompetitions: competitions.map((c) => ({
+    console.log("[v0] Filtered competitions result:", {
+      filteredCount: filtered.length,
+      filtered: filtered.map((c) => ({
         id: c.id,
         type: c.type,
-        hole: c.holeNumber,
-        day: c.day,
-        enabled: c.enabled,
-        courseId: c.courseId,
+        holeNumber: c.holeNumber,
       })),
-      filteredCompetitions: filtered.map((c) => ({
-        id: c.id,
-        type: c.type,
-        hole: c.holeNumber,
-        day: c.day,
-      })),
-      filterCriteria: {
-        currentHole,
-        groupDay: selectedGroup?.day,
-        hasGroup: !!selectedGroup,
-      },
     })
 
     return filtered
-  }, [competitions, currentHole, selectedGroup]) // Updated dependency to selectedGroup
+  }, [competitions, currentHole, selectedGroup?.day]) // Updated dependency to selectedGroup?.day
 
   const getCompetitionLeader = (
     competitionId: string,
@@ -1506,6 +1508,44 @@ export function PlayerScoreEntry({
                         </div>
                       </div>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Active Competitions for Current Hole */}
+              {activeCompetitions.length > 0 && (
+                <div className="bg-white rounded-lg overflow-hidden shadow-md">
+                  <div className="bg-amber-500 px-3 py-1.5">
+                    <h2 className="text-sm font-bold text-emerald-900 text-center flex items-center justify-center gap-1">
+                      <Trophy className="w-4 h-4" />
+                      Competition{activeCompetitions.length > 1 ? "s" : ""} on Hole {currentHole}
+                    </h2>
+                  </div>
+
+                  <div className="bg-white p-3 space-y-2">
+                    {activeCompetitions.map((comp) => {
+                      const leader = getCompetitionLeader(comp.id, comp.type)
+                      const competitionName = comp.type
+                        .split("-")
+                        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                        .join(" ")
+
+                      return (
+                        <div key={comp.id} className="border border-amber-200 rounded-lg p-2 bg-amber-50">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-bold text-emerald-900">{competitionName}</span>
+                            {leader && (
+                              <div className="text-xs text-emerald-700">
+                                <span className="font-semibold">{leader.player}</span>
+                                <span className="mx-1">•</span>
+                                <span>{leader.distance}m</span>
+                              </div>
+                            )}
+                          </div>
+                          {!leader && <div className="text-xs text-slate-500 italic">No entries yet</div>}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}

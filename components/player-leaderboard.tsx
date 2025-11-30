@@ -164,23 +164,47 @@ export function PlayerLeaderboard({
           }
         })
 
+        console.log(`[v0] Points calculation for ${player.name}:`, {
+          totalPlayerRounds: playerRounds.length,
+          daysWithRounds: Array.from(roundsByDay.keys()),
+          selectedRoundsCount: selectedRounds.length,
+          selectedRoundIds: selectedRounds.map((r) => r.id),
+        })
+
         let totalStrokes = 0
         let totalPoints = 0
         let totalNetScore = 0
         let totalHolesPlayed = 0
         let hasCompletedRound = false
 
-        selectedRounds.forEach((round) => {
+        selectedRounds.forEach((round, roundIndex) => {
           if (!round?.holes) return
 
           const group = safeGroups.find((g) => g.id === round.groupId)
           const course = group ? safeCourses.find((c) => c.id === group.courseId) : null
           const handicapUsed = round.handicapUsed || player.handicap
 
-          const scoredHoles = round.holes.filter((h) => h.strokes >= 0 && (h.strokes > 0 || h.points > 0))
+          const scoredHoles = round.holes.filter((h) => h.strokes > 0)
+
+          const roundPoints = scoredHoles.reduce((sum, hole) => sum + hole.points, 0)
+          console.log(
+            `[v0]   Round ${roundIndex + 1} (Day ${group?.day}, ${round.completed ? "Complete" : "In Progress"}):`,
+            {
+              roundId: round.id,
+              holesInRound: round.holes.length,
+              scoredHoles: scoredHoles.length,
+              pointsFromRound: roundPoints,
+              holesDetails: scoredHoles.map((h) => ({
+                hole: h.holeNumber,
+                strokes: h.strokes,
+                points: h.points,
+              })),
+            },
+          )
+
           totalHolesPlayed += scoredHoles.length
           totalStrokes += scoredHoles.reduce((sum, hole) => sum + hole.strokes, 0)
-          totalPoints += scoredHoles.reduce((sum, hole) => sum + hole.points, 0)
+          totalPoints += roundPoints
 
           scoredHoles.forEach((hole) => {
             if (hole.netScore !== undefined && hole.netScore !== null) {
@@ -199,6 +223,12 @@ export function PlayerLeaderboard({
           if (round.completed || round.submitted || scoredHoles.length > 0) {
             hasCompletedRound = true
           }
+        })
+
+        console.log(`[v0]   TOTAL for ${player.name}:`, {
+          totalPoints,
+          totalHolesPlayed,
+          totalStrokes,
         })
 
         return {
