@@ -40,7 +40,7 @@ import {
 import { PlayerLeaderboard } from "@/components/player-leaderboard" // Added PlayerLeaderboard component
 
 type PlayerScoreEntryProps = {
-  currentUser: { id: string; name: string; tournamentId: string; handicap: number } // Added handicap to currentUser
+  currentUser: { id: string; name: string; tournamentId: string; handicap: number; role?: "admin" } // Added handicap and role to currentUser
   players: Player[]
   courses: Course[]
   groups: Group[]
@@ -1606,6 +1606,11 @@ export function PlayerScoreEntry({
             <DialogHeader>
               <DialogTitle>Leaderboard</DialogTitle>
             </DialogHeader>
+            {console.log("[v0] Scorecard Leaderboard Modal - tournament:", {
+              hasTournament: !!tournament,
+              blurTop5: tournament?.blurTop5,
+              tournamentId: tournament?.id,
+            })}
             <PlayerLeaderboard
               tournamentId={currentUser.tournamentId!}
               currentUserId={currentUser.id}
@@ -1614,6 +1619,7 @@ export function PlayerScoreEntry({
               rounds={rounds}
               groups={groups}
               tournament={tournament}
+              isAdmin={currentUser.role === "admin"}
             />
           </DialogContent>
         </Dialog>

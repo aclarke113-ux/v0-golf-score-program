@@ -226,6 +226,7 @@ export function PlayerDashboard({
                 notifications={notifications}
                 setNotifications={setNotifications}
                 onDataChange={onDataChange}
+                tournament={currentTournament!}
               />
             </TabsContent>
 
